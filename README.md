@@ -149,6 +149,9 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
 | `ZHIPU_API_KEY` | 无 | 智谱 API Key，设置后可添加 AI 玩家 |
 | `ZHIPU_MODEL` | `glm-4.7-flash` | 智谱模型 |
 | `ZHIPU_THINKING` | 无 | 设为 `1` 开启深度思考 |
+| `ZHIPU_BOT_ENABLED` | 无 | 设为 `false` 时即使有 Key 也不启用 AI 玩家 |
+| `ZHIPU_API_URL` | 智谱官方地址 | 完整的 chat/completions 接口地址 |
+| `ZHIPU_TIMEOUT_SECONDS` | `25` | 单次请求超时（秒），超时的那一步改由内置策略处理 |
 | `DB_PATH` | `data/catan.db` | 数据库文件位置（Docker 中为 `/app/data/catan.db`） |
 
 健康检查：`GET /health`

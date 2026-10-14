@@ -7,13 +7,17 @@ const { RES, PIPS } = require('./board');
 const { COST, sumRes, hasRes } = require('./game');
 const { vertexScore, roadScore } = require('./bot');
 
+// 兼容两套变量名：ZHIPU_API_KEY / ZHIPU_MODEL 通用；
+// 另外支持 ZHIPU_BOT_ENABLED（显式设为 false 时关闭）、ZHIPU_API_URL（完整接口地址）、ZHIPU_TIMEOUT_SECONDS
+const env = (k) => (process.env[k] || '').trim();
+const apiUrl = env('ZHIPU_API_URL') || (env('ZHIPU_BASE_URL') ? env('ZHIPU_BASE_URL').replace(/\/$/, '') + '/chat/completions' : 'https://open.bigmodel.cn/api/paas/v4/chat/completions');
 const CFG = {
-  key: (process.env.ZHIPU_API_KEY || '').trim(),
-  model: (process.env.ZHIPU_MODEL || 'glm-4.7-flash').trim(),
-  base: (process.env.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4').trim().replace(/\/$/, ''),
-  thinking: /^(1|true|on|enabled)$/i.test(process.env.ZHIPU_THINKING || ''),
-  timeout: Number(process.env.AI_TIMEOUT_MS) || 25000,
-  concurrency: Number(process.env.AI_CONCURRENCY) || 3,
+  key: /^(0|false|off|no)$/i.test(env('ZHIPU_BOT_ENABLED')) ? '' : env('ZHIPU_API_KEY'),
+  model: env('ZHIPU_MODEL') || 'glm-4.7-flash',
+  url: /\/chat\/completions$/.test(apiUrl) ? apiUrl : apiUrl.replace(/\/$/, '') + '/chat/completions',
+  thinking: /^(1|true|on|enabled)$/i.test(env('ZHIPU_THINKING')),
+  timeout: Number(env('AI_TIMEOUT_MS')) || (Number(env('ZHIPU_TIMEOUT_SECONDS')) || 0) * 1000 || 25000,
+  concurrency: Number(env('AI_CONCURRENCY')) || 3,
 };
 
 const stats = { calls: 0, errors: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, lastError: null, lastErrorAt: null };
@@ -70,7 +74,7 @@ async function ask(user, maxTokens = 200) {
       thinking: { type: CFG.thinking ? 'enabled' : 'disabled' },
     };
     try {
-      const res = await fetch(`${CFG.base}/chat/completions`, {
+      const res = await fetch(CFG.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CFG.key}` },
         body: JSON.stringify(body),
