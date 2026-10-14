@@ -132,6 +132,8 @@
       <div class="panel">
         <h2>邀请朋友</h2>
         <div class="join-row"><input id="lobby-link" readonly aria-label="邀请链接"><button class="btn" id="btn-copy">复制链接</button></div>
+        <div class="block-head"><h2>邀请在线玩家</h2><span class="muted small" id="online-count"></span></div>
+        <ul id="online-list" class="online-list"><li class="empty">正在获取在线玩家…</li></ul>
         <h2>地图</h2>
         <div id="lobby-size" class="size-pick"></div>
         <div class="opts">
@@ -198,6 +200,7 @@
   </footer>
 </section>
 
+<div id="invite-root" aria-live="polite"></div>
 <div id="modal-root"></div>
 <div id="fx-layer" aria-hidden="true"></div>
 <div id="toast-root" aria-live="polite"></div>

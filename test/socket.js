@@ -111,7 +111,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const code = (await a.wait((m) => m.t === 'room')).d.room.code;
     const b = await loginWS('B', sBlue);
     const g = await loginWS('G', sGreen);
-    b.send('join', { code });
+    // ---------- 邀请在线玩家 ----------
+    a.send('online');
+    const ol = (await a.wait((m) => m.t === 'online')).d;
+    const blue = ol.find((u) => u.username === '小蓝');
+    assert.ok(blue && blue.status === 'idle', '在线列表应包含空闲的小蓝');
+    a.send('invite', { userId: blue.id });
+    const inv = (await b.wait((m) => m.t === 'invite')).d;
+    assert.strictEqual(inv.code, code);
+    assert.strictEqual(inv.from, '小红');
+    a.send('invite', { userId: blue.id });
+    await a.wait((m) => m.t === 'error' && /刚刚邀请过/.test(m.d.msg));
+    b.send('inviteReply', { fromUser: inv.fromUser, code, accept: false });
+    await a.wait((m) => m.t === 'toast' && /小蓝 暂时不能加入/.test(m.d.msg));
+    console.log('✓ 邀请在线玩家：在线列表、发出邀请、防重复、拒绝通知');
+
+    b.send('join', { code: inv.code });
     g.send('join', { code });
     await a.wait((m) => m.t === 'room' && m.d.room.players.length === 3);
     assert.deepStrictEqual(a.state.room.players.map((p) => p.name).sort(), ['小红', '小绿', '小蓝'], '玩家名应为账号名');

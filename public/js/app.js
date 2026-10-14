@@ -177,6 +177,12 @@ function onMessage(t, d) {
     case 'rtc':
       voice.handleSignal(d);
       break;
+    case 'online':
+      renderOnline(d);
+      break;
+    case 'invite':
+      showInvite(d);
+      break;
     case 'voiceToken':
       voice.agoraRenew(d);
       break;
@@ -447,6 +453,7 @@ async function applyRoom(d) {
     if (prevRoom && prevRoom.players.length < d.room.players.length) sound.play('join');
     showScreen('lobby');
     renderLobby();
+    startOnlinePolling();
     return;
   }
 
@@ -1375,6 +1382,95 @@ function openRules() {
     <div class="modal-actions"><button class="btn primary" data-close>明白了</button></div>`,
     { cls: 'rules-modal' }
   );
+}
+
+// ======================= 邀请在线玩家 =======================
+const STATUS_TEXT = { idle: '空闲', room: '在房间中', playing: '对局中' };
+let onlineTimer = null;
+
+function startOnlinePolling() {
+  if (onlineTimer) return;
+  const tick = () => {
+    if (document.body.dataset.screen !== 'lobby' || !S.connected) return stopOnlinePolling();
+    send('online');
+  };
+  tick();
+  onlineTimer = setInterval(tick, 4000);
+}
+function stopOnlinePolling() {
+  clearInterval(onlineTimer);
+  onlineTimer = null;
+}
+
+function renderOnline(list) {
+  const box = $('#online-list');
+  if (!box || !S.room) return;
+  const me = S.room.players.find((p) => p.id === S.you);
+  const full = S.room.players.length >= S.room.max;
+  $('#online-count').textContent = list.length ? `${list.length} 人在线` : '';
+  if (!list.length) {
+    box.innerHTML = '<li class="empty">现在没有其他在线玩家。把上面的链接发给朋友吧。</li>';
+    return;
+  }
+  box.innerHTML = list
+    .map(
+      (u) => `<li class="ol-row">
+      <span class="ol-dot ${u.status}"></span>
+      <span class="ol-name">${esc(u.username)}</span>
+      <span class="ol-status">${STATUS_TEXT[u.status] || ''}</span>
+      <button class="mini ${u.invited ? 'ghost' : ''}" data-invite="${u.id}" ${!me || full || u.invited ? 'disabled' : ''}>${u.invited ? '已邀请' : '邀请'}</button>
+    </li>`
+    )
+    .join('');
+  $$('[data-invite]', box).forEach((b) =>
+    b.addEventListener('click', () => {
+      sound.play('click');
+      send('invite', { userId: Number(b.dataset.invite) });
+      b.disabled = true;
+      b.textContent = '已邀请';
+      b.classList.add('ghost');
+    })
+  );
+}
+
+function showInvite(d) {
+  if (!S.user) return;
+  const root = $('#invite-root');
+  // 同一房间的旧邀请只保留最新一条
+  for (const el of $$('.invite-card', root)) if (el.dataset.code === d.code) el.remove();
+  const inGame = S.game && S.game.phase !== 'ended' && S.room && S.room.code !== d.code && S.you;
+  const card = document.createElement('div');
+  card.className = 'invite-card';
+  card.dataset.code = d.code;
+  card.innerHTML = `<div class="ic-text"><b>${esc(d.from)}</b> 邀请你加入「${esc(d.title)}」
+      <small>${d.size} 人地图，已有 ${d.players} / ${d.max} 人${inGame ? '。接受后，你当前的对局将暂时由电脑代打' : ''}</small></div>
+    <div class="ic-btns"><button class="btn ghost ic-no">忽略</button><button class="btn primary ic-yes">加入</button></div>
+    <i class="ic-timer"></i>`;
+  root.prepend(card);
+  while (root.children.length > 3) root.lastChild.remove();
+  const close = () => {
+    card.classList.add('out');
+    setTimeout(() => card.remove(), 250);
+  };
+  const timer = setTimeout(() => {
+    send('inviteReply', { fromUser: d.fromUser, code: d.code, accept: false });
+    close();
+  }, 60000);
+  card.querySelector('.ic-yes').onclick = () => {
+    clearTimeout(timer);
+    sound.unlock();
+    closeModal();
+    send('join', { code: d.code });
+    for (const el of $$('.invite-card', root)) el.remove();
+  };
+  card.querySelector('.ic-no').onclick = () => {
+    clearTimeout(timer);
+    send('inviteReply', { fromUser: d.fromUser, code: d.code, accept: false });
+    close();
+  };
+  sound.play('offer');
+  setTimeout(() => sound.play('turn'), 250);
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification(`${d.from} 邀请你玩卡坦岛`);
 }
 
 // ======================= 语音 =======================

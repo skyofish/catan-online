@@ -720,6 +720,61 @@ const handlers = {
     conn.send({ t: 'hello', d: { user: s.user } });
   },
 
+  // 在线玩家（供房间内邀请）：状态为 空闲 / 在房间中 / 对局中
+  online(conn) {
+    const room = conn.room && rooms.get(conn.room);
+    const inRoom = new Set(room ? room.players.filter((p) => p.userId).map((p) => p.userId) : []);
+    const out = [];
+    for (const [uid, set] of userConns) {
+      if (uid === conn.user.id || inRoom.has(uid)) continue;
+      let status = 'idle';
+      let username = '';
+      for (const c of set) {
+        username = c.user.username;
+        const r = c.room && rooms.get(c.room);
+        if (!r) continue;
+        const pl = r.players.find((p) => p.userId === uid);
+        const st = r.game && r.game.phase !== 'ended' && pl ? 'playing' : 'room';
+        if (st === 'playing' || status === 'idle') status = st;
+      }
+      const cool = room && room.invited && room.invited.get(uid);
+      out.push({ id: uid, username, status, invited: !!(cool && Date.now() - cool < 30000) });
+    }
+    const order = { idle: 0, room: 1, playing: 2 };
+    out.sort((a, b) => order[a.status] - order[b.status] || a.username.localeCompare(b.username, 'zh'));
+    conn.send({ t: 'online', d: out });
+  },
+
+  invite(conn, d) {
+    const { room, me } = ctx(conn);
+    if (!me) throw new Error('观战者不能邀请');
+    if (room.game && room.game.phase !== 'ended') throw new Error('对局已开始，不能再邀请');
+    if (room.players.length >= LAYOUTS[room.size].maxPlayers) throw new Error('房间已满');
+    const uid = Number(d.userId);
+    const targets = userConns.get(uid);
+    if (!targets || !targets.size) throw new Error('对方已离线');
+    if (room.players.some((p) => p.userId === uid)) throw new Error('对方已在房间中');
+    room.invited = room.invited || new Map();
+    const last = room.invited.get(uid);
+    if (last && Date.now() - last < 30000) throw new Error('刚刚邀请过，请稍等再试');
+    room.invited.set(uid, Date.now());
+    const msg = {
+      t: 'invite',
+      d: { id: rid(4), from: me.name, fromUser: conn.user.id, code: room.code, title: room.title, size: room.size, players: room.players.length, max: LAYOUTS[room.size].maxPlayers },
+    };
+    for (const c of targets) c.send(msg);
+    const name = [...targets][0].user.username;
+    conn.send({ t: 'toast', d: { msg: `已邀请 ${name}` } });
+  },
+
+  // 被邀请者拒绝时通知邀请人
+  inviteReply(conn, d) {
+    if (d.accept) return;
+    const set = userConns.get(Number(d.fromUser));
+    if (!set) return;
+    for (const c of set) if (c.room === String(d.code || '')) c.send({ t: 'toast', d: { msg: `${conn.user.username} 暂时不能加入` } });
+  },
+
   list(conn) {
     const list = [...rooms.values()]
       .filter((r) => !r.private)
@@ -769,7 +824,11 @@ const handlers = {
     const code = String(d.code || '').toUpperCase().trim();
     const room = rooms.get(code);
     if (!room) throw new Error('房间不存在');
-    if (conn.room && conn.room !== code) leaveRoom(conn);
+    if (conn.room && conn.room !== code) {
+      conn.explicitLeave = true;
+      leaveRoom(conn);
+      conn.explicitLeave = false;
+    }
     room.spectators.delete(conn);
     conn.room = code;
     let p = room.players.find((x) => x.userId === conn.user.id && !x.isBot);

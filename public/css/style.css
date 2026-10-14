@@ -726,3 +726,30 @@ body.admin-page { overflow: auto; background-color: var(--sea-deep); background-
   .top-btns { gap: 4px; }
   .top-btns .icon-btn { width: 32px; height: 32px; }
 }
+
+/* ============ 邀请在线玩家 ============ */
+.online-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+.online-list .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+.ol-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.2); }
+.ol-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: #5fae4f; box-shadow: 0 0 6px #5fae4f; }
+.ol-dot.room { background: var(--brass); box-shadow: 0 0 6px var(--brass); }
+.ol-dot.playing { background: #e2715d; box-shadow: 0 0 6px #e2715d; }
+.ol-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ol-status { font-size: 12px; color: var(--muted); }
+#invite-root { position: fixed; top: 64px; right: 16px; z-index: 75; display: flex; flex-direction: column; gap: 10px; width: min(340px, calc(100vw - 32px)); }
+.invite-card {
+  position: relative; overflow: hidden; background: linear-gradient(180deg, var(--wood-2), var(--wood)); border: 1px solid var(--brass);
+  border-radius: 12px; padding: 12px 14px 14px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55); animation: ic-in 0.4s cubic-bezier(.2, 1.3, .4, 1);
+}
+.invite-card.out { opacity: 0; transform: translateX(30px); transition: all 0.25s; }
+@keyframes ic-in { from { transform: translateX(60px) scale(0.9); opacity: 0; } }
+.ic-text { font-size: 15px; line-height: 1.45; }
+.ic-text b { color: #ffe39a; }
+.ic-text small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.ic-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.ic-btns .btn { padding: 6px 16px; }
+.ic-timer { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--brass); transform-origin: left; animation: ic-timer 60s linear forwards; }
+@keyframes ic-timer { to { transform: scaleX(0); } }
+@media (max-width: 860px) {
+  #invite-root { top: 86px; left: 16px; right: 16px; width: auto; }
+}
