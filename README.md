@@ -36,6 +36,37 @@ docker run -d --name catan -p 3000:3000 --restart unless-stopped catan-online
 node server/index.js          # 或 npm start
 ```
 
+## 自动部署（GitHub Actions）
+
+推送到 `main` 分支后，Actions 会先运行测试，通过后 SSH 到服务器执行
+`git reset --hard origin/main && ./deploy.sh`。
+
+**一次性准备**
+
+1. 服务器上克隆代码并写好端口配置：
+   ```bash
+   git clone https://github.com/skyofish/catan-online.git ~/catan
+   echo "CATAN_PORT=80" > ~/catan/.env
+   ```
+2. 服务器上生成一把专用于部署的密钥，并允许它登录：
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N "" -C github-actions
+   cat ~/.ssh/github_deploy.pub >> ~/.ssh/authorized_keys
+   cat ~/.ssh/github_deploy      # 复制输出的全部内容，下一步要用
+   ```
+3. 在 GitHub 仓库 Settings → Secrets and variables → Actions 添加：
+
+   | Secret | 值 |
+   | --- | --- |
+   | `SSH_HOST` | 服务器 IP |
+   | `SSH_KEY` | 上一步输出的私钥全文（包括 BEGIN / END 行） |
+   | `SSH_USER` | 可选，默认 `ubuntu` |
+   | `SSH_PORT` | 可选，默认 `22` |
+   | `DEPLOY_PATH` | 可选，默认 `~/catan` |
+
+之后每次推送都会自动部署；也可以在 Actions 页面手动点 “Run workflow”。
+手动部署：在服务器上 `cd ~/catan && git pull && ./deploy.sh`。
+
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |
