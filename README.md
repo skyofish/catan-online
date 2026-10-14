@@ -1,7 +1,23 @@
 # 卡坦岛 在线版
 
-网页端卡坦岛，支持 4 / 6 / 8 人地图、好友联机、电脑玩家、动画与合成音效。
-服务端与前端均为原生 JavaScript，**没有任何第三方依赖**，不需要 `npm install`。
+网页端卡坦岛，支持 4 / 6 / 8 人地图、好友联机、电脑玩家、动画与合成音效，
+以及账号登录、战绩排行榜和管理员后台。
+服务端与前端均为原生 JavaScript，数据保存在 SQLite（Node 内置 `node:sqlite`），
+**没有任何第三方依赖**，不需要 `npm install`。
+
+## 账号与管理员
+
+- 玩家必须用账号登录才能进入，**账号不需要密码**，由管理员在后台开通。
+- 管理员后台：`http://服务器地址/admin`，用环境变量 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录。
+  **不要把密码写进代码或提交到仓库**，写在服务器项目目录下的 `.env` 文件里：
+  ```bash
+  CATAN_PORT=80
+  ADMIN_USERNAME=你的管理员账号
+  ADMIN_PASSWORD=你的管理员密码
+  ```
+- 管理员可以批量添加账号、启用 / 禁用、删除。禁用或删除后，该玩家立即被强制下线；
+  正在进行的对局由电脑接管。删除账号后，历史战绩里仍保留其名字。
+- 管理员登录 12 小时后过期；玩家登录 180 天内有效。
 
 ## 快速部署（Docker）
 
@@ -30,10 +46,10 @@ docker run -d --name catan -p 3000:3000 --restart unless-stopped catan-online
 
 ### 不用 Docker
 
-需要 Node.js 18 以上（运行测试需要 22 以上）：
+需要 Node.js 22.13 以上：
 
 ```bash
-node server/index.js          # 或 npm start
+ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
 ```
 
 ## 自动部署（GitHub Actions）
@@ -76,6 +92,9 @@ node server/index.js          # 或 npm start
 | `BOT_DELAY_MS` | `900` | 电脑玩家每步的间隔（毫秒），掷骰后自动加长以便看清动画 |
 | `AFK_TAKEOVER_MS` | `60000` | 真人掉线多久后由电脑临时代管，重新连上后自动交还 |
 | `MAX_ROOMS` | `200` | 同时存在的房间上限 |
+| `ADMIN_USERNAME` | 无 | 管理员账号，未设置时后台无法登录 |
+| `ADMIN_PASSWORD` | 无 | 管理员密码 |
+| `DB_PATH` | `data/catan.db` | 数据库文件位置（Docker 中为 `/app/data/catan.db`） |
 
 健康检查：`GET /health`
 
@@ -96,18 +115,23 @@ node server/index.js          # 或 npm start
   以及可开关的生成式背景音乐。音量在右上角 ♪ 中调节。
 - **快捷键**：R 掷骰，E 结束回合，T 交易，1–4 建造，Esc 取消，+ / − 缩放，0 复位视角。
 - **手机**：竖屏可玩，双指缩放棋盘，玩家列表与聊天为侧边抽屉。
+- **战绩**：每局结束自动记录；首页有排行榜（按胜场、胜率排序）和「我的战绩」（最近 10 局）。
+- **续玩**：进行中的对局实时写入数据库，部署或重启后自动恢复，玩家刷新页面即可回到原座位。
 
 ## 项目结构
 
 ```
 server/
-  index.js   HTTP 静态服务 + 房间管理 + 消息处理
+  index.js   HTTP 静态服务 + 登录 / 管理员 API + 房间管理 + 对局持久化
+  db.js      SQLite 数据层（账号、会话、房间快照、战绩）
   ws.js      零依赖 WebSocket 服务端实现（RFC 6455）
   game.js    规则引擎（服务器权威，按玩家隐藏手牌）
   board.js   4/6/8 人地图生成
   bot.js     电脑玩家
 public/
   index.html  页面与 SVG 图标
+  admin.html  管理员后台
+  js/admin.js   后台逻辑
   css/style.css
   js/app.js     界面、网络、事件动画编排
   js/board.js   SVG 棋盘渲染与平移缩放
@@ -115,12 +139,17 @@ public/
   js/audio.js   合成音效与背景音乐
 test/
   sim.js     36 局电脑对局，校验资源守恒、距离规则、棋子数量
-  socket.js  联机冒烟测试（建房、加入、权限、聊天、重连、观战）
+  socket.js  端到端测试（管理员、登录、禁用踢出、重启续玩、战绩排行）
 ```
 
 运行测试：`npm test`
 
 ## 说明
 
-- 房间数据保存在内存中，重启容器会清空正在进行的对局。
+- 数据库保存在 Docker 数据卷 `catan-data` 中，重建镜像、重启容器都不会丢失。
+  备份（在线一致性快照）：
+  ```bash
+  docker compose exec catan node -e "new (require('node:sqlite').DatabaseSync)('/app/data/catan.db').exec(\"VACUUM INTO '/tmp/backup.db'\")"
+  docker compose cp catan:/tmp/backup.db ./catan-backup-$(date +%F).db
+  ```
 - 单个进程即可支撑大量房间；如需多实例横向扩展，需要在负载均衡上开启会话保持（同一房间的玩家连到同一实例）。

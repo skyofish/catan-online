@@ -1,7 +1,11 @@
 node_modules
 test
 .git
+.github
 *.log
+data
+.env
 README.md
 docker-compose.yml
 nginx.conf.example
+deploy.sh

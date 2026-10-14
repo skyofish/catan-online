@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>账号管理 - 卡坦岛</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-page">
+<main class="admin">
+  <header class="admin-head">
+    <h1>账号管理</h1>
+    <a href="/">返回游戏</a>
+  </header>
+
+  <section id="admin-login" class="panel admin-login" hidden>
+    <h2>管理员登录</h2>
+    <form id="admin-login-form">
+      <label>账号<input id="a-user" autocomplete="username" required></label>
+      <label>密码<input id="a-pass" type="password" autocomplete="current-password" required></label>
+      <p id="a-error" class="form-error" role="alert" hidden></p>
+      <button class="btn primary wide" id="a-submit">登录</button>
+    </form>
+  </section>
+
+  <section id="admin-main" hidden>
+    <div class="admin-stack">
+      <div class="admin-bar">
+        <div class="counts" id="counts"></div>
+        <button class="btn ghost" id="btn-reload">刷新</button>
+        <button class="btn ghost" id="btn-alogout">退出登录</button>
+      </div>
+
+      <form class="panel" id="add-form">
+        <h2>添加账号</h2>
+        <p class="muted">玩家只需输入账号即可登录，不需要密码。可一次添加多个，用空格、逗号或换行分隔；账号只能包含中英文、数字、_ . -，最长 16 个字符。</p>
+        <div class="add-row">
+          <textarea id="add-names" rows="1" placeholder="例如：小红 小蓝 alice" aria-label="要添加的账号"></textarea>
+          <button class="btn primary" id="btn-add">添加</button>
+        </div>
+        <div id="add-result" class="add-result" aria-live="polite"></div>
+      </form>
+
+      <div class="panel">
+        <div class="table-head">
+          <h2>全部账号</h2>
+          <input id="filter" placeholder="搜索账号" aria-label="搜索账号">
+        </div>
+        <div class="table-wrap">
+          <table class="users">
+            <thead><tr><th>账号</th><th>状态</th><th>在线</th><th>对局</th><th>胜场</th><th>最后登录</th><th>创建时间</th><th></th></tr></thead>
+            <tbody id="users"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="toast-root" aria-live="polite"></div>
+<script type="module" src="/js/admin.js"></script>
+</body>
+</html>

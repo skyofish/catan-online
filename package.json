@@ -1,12 +1,14 @@
 {
   "name": "catan-online",
   "version": "1.0.0",
-  "description": "网页版卡坦岛：4/6/8 人地图、多人联机、动画与音效（零第三方依赖）",
+  "description": "网页版卡坦岛：4/6/8 人地图、多人联机、账号与战绩（SQLite），零第三方依赖",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "test": "node test/sim.js && node test/socket.js"
   },
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "license": "MIT"
 }

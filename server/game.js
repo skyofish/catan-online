@@ -729,6 +729,20 @@ class Game {
     this.finishTurn(events);
   }
 
+  // ---------- 序列化（持久化到数据库） ----------
+  toJSON() {
+    const out = {};
+    for (const [k, v] of Object.entries(this)) if (k !== 'rng' && k !== 'layout') out[k] = v;
+    return out;
+  }
+  static fromJSON(data, rng = Math.random) {
+    const g = Object.create(Game.prototype);
+    Object.assign(g, data);
+    g.rng = rng;
+    g.layout = LAYOUTS[g.size];
+    return g;
+  }
+
   // ---------- 视图（按玩家隐藏信息） ----------
   view(pid, full = false) {
     const me = this.P(pid);

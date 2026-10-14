@@ -44,8 +44,8 @@ const resText = (r) => RES_LIST.filter((k) => r[k]).map((k) => `${r[k]} ${RES_NA
 
 const S = {
   ws: null,
-  token: LS.get('catan.token', null),
-  name: LS.get('catan.name', ''),
+  session: LS.get('catan.session', null),
+  user: null,
   room: null,
   you: null,
   game: null,
@@ -55,6 +55,7 @@ const S = {
   chat: [],
   unread: 0,
   rightTab: 'log',
+  homeTab: 'rooms',
   queue: Promise.resolve(),
   prevHand: null,
   lastLogId: 0,
@@ -77,7 +78,7 @@ function connect() {
     S.connected = true;
     S.retry = 0;
     setConn(true);
-    send('hello', { token: S.token });
+    send('hello', { session: S.session });
   };
   ws.onmessage = (ev) => {
     let m;
@@ -107,18 +108,52 @@ function setConn(ok) {
   document.body.classList.toggle('offline', !ok);
 }
 
+async function api(path, { method = 'GET', body } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (S.session) headers.Authorization = 'Bearer ' + S.session;
+  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401 && path !== '/api/login') signedOut();
+    const e = new Error(data.error || '请求失败，请稍后再试');
+    e.status = res.status;
+    throw e;
+  }
+  return data;
+}
+
+function signedOut(reason) {
+  S.session = null;
+  S.user = null;
+  LS.set('catan.session', null);
+  S.room = null;
+  S.game = null;
+  S.board = null;
+  S.gameId = null;
+  closeModal();
+  showScreen('login');
+  if (reason) showLoginError(reason);
+}
+
 function onMessage(t, d) {
   switch (t) {
     case 'hello': {
-      S.token = d.token;
-      LS.set('catan.token', d.token);
+      S.user = d.user;
+      $('#me-name').textContent = d.user.username;
       const params = new URLSearchParams(location.search);
       const code = params.get('room') || sessionStorage.getItem('catan.room');
-      if (code) send('join', { code, name: S.name || randomName() });
+      if (code) send('join', { code });
       else showScreen('home');
       send('list');
       break;
     }
+    case 'auth':
+      signedOut();
+      break;
+    case 'kicked':
+      signedOut(d.reason);
+      sound.play('error');
+      break;
     case 'rooms':
       renderRoomList(d);
       break;
@@ -171,14 +206,56 @@ function onMessage(t, d) {
 
 // ======================= 屏幕切换 =======================
 function showScreen(name) {
-  for (const s of $$('.screen')) s.hidden = s.id !== `screen-${name}`;
+  const login = name === 'login';
+  const target = login ? 'home' : name;
+  for (const s of $$('.screen')) s.hidden = s.id !== `screen-${target}`;
   document.body.dataset.screen = name;
-  if (name === 'home') loadDemo();
+  $('#login-form').hidden = !login;
+  $('#ledger-main').hidden = login;
+  if (target === 'home') loadDemo();
+  if (login) setTimeout(() => $('#login-name').focus(), 50);
+  if (name === 'home') refreshHomeTab();
 }
 
-const NAMES = ['航海家', '开拓者', '伐木工', '牧羊人', '矿工', '砖匠', '农夫', '商人', '探险家', '建筑师'];
-function randomName() {
-  return NAMES[Math.floor(Math.random() * NAMES.length)] + Math.floor(Math.random() * 90 + 10);
+// ======================= 登录 =======================
+function showLoginError(msg) {
+  const el = $('#login-error');
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+
+function initLogin() {
+  const last = LS.get('catan.lastUser', '');
+  if (last) $('#login-name').value = last;
+  $('#login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    sound.unlock();
+    const username = $('#login-name').value.trim();
+    if (!username) return showLoginError('请输入账号');
+    const btn = $('#btn-login');
+    btn.disabled = true;
+    showLoginError('');
+    try {
+      const r = await api('/api/login', { method: 'POST', body: { username } });
+      S.session = r.token;
+      LS.set('catan.session', r.token);
+      LS.set('catan.lastUser', r.user.username);
+      sound.play('join');
+      send('hello', { session: S.session });
+    } catch (err) {
+      showLoginError(err.message);
+      sound.play('error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  $('#btn-logout').addEventListener('click', async () => {
+    try {
+      await api('/api/logout', { method: 'POST' });
+    } catch {}
+    signedOut();
+    send('hello', { session: null });
+  });
 }
 
 // ======================= 首页 =======================
@@ -196,14 +273,6 @@ async function loadDemo() {
 }
 
 function initHome() {
-  const nameInput = $('#name');
-  nameInput.value = S.name || randomName();
-  const saveName = () => {
-    S.name = nameInput.value.trim().slice(0, 16) || randomName();
-    LS.set('catan.name', S.name);
-  };
-  nameInput.addEventListener('change', saveName);
-
   S.createSize = 4;
   $$('#size-pick button').forEach((b) =>
     b.addEventListener('click', () => {
@@ -219,9 +288,7 @@ function initHome() {
   );
   $('#btn-create').addEventListener('click', () => {
     sound.unlock();
-    saveName();
     send('create', {
-      name: S.name,
       size: S.createSize,
       targetVP: Number($('#opt-vp').value),
       specialBuild: $('#opt-special').checked,
@@ -230,15 +297,90 @@ function initHome() {
   });
   const join = () => {
     sound.unlock();
-    saveName();
     const code = $('#join-code').value.trim().toUpperCase();
     if (code.length < 4) return toast('请输入房间号', 'warn');
-    send('join', { code, name: S.name });
+    send('join', { code });
   };
   $('#btn-join').addEventListener('click', join);
   $('#join-code').addEventListener('keydown', (e) => e.key === 'Enter' && join());
-  $('#btn-refresh').addEventListener('click', () => send('list'));
-  setInterval(() => document.body.dataset.screen === 'home' && S.connected && send('list'), 5000);
+  $('#btn-refresh').addEventListener('click', () => refreshHomeTab(true));
+  $$('[data-htab]').forEach((b) =>
+    b.addEventListener('click', () => {
+      sound.play('click');
+      S.homeTab = b.dataset.htab;
+      refreshHomeTab(true);
+    })
+  );
+  setInterval(() => document.body.dataset.screen === 'home' && S.connected && S.homeTab === 'rooms' && send('list'), 5000);
+}
+
+function refreshHomeTab(force) {
+  $$('[data-htab]').forEach((b) => b.setAttribute('aria-selected', b.dataset.htab === S.homeTab));
+  for (const t of ['rooms', 'rank', 'mine']) $(`#htab-${t}`).hidden = t !== S.homeTab;
+  if (!S.session) return;
+  if (S.homeTab === 'rooms') {
+    if (force && S.connected) send('list');
+  } else if (S.homeTab === 'rank') loadRank();
+  else loadMine();
+}
+
+const fmtDate = (t) => {
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+const pct = (w, g) => (g ? Math.round((w / g) * 100) + '%' : '—');
+
+async function loadRank() {
+  const box = $('#htab-rank');
+  if (!box.innerHTML) box.innerHTML = '<p class="empty">加载中…</p>';
+  try {
+    const { rows } = await api('/api/leaderboard');
+    if (!rows.length) {
+      box.innerHTML = '<p class="empty">还没有完成的对局。打完第一局，这里就会出现排名。</p>';
+      return;
+    }
+    box.innerHTML = `<table class="rank-table">
+      <thead><tr><th>名次</th><th>玩家</th><th>胜 / 局</th><th>胜率</th><th>平均分</th></tr></thead>
+      <tbody>${rows
+        .map(
+          (r, i) => `<tr class="${S.user && r.id === S.user.id ? 'me' : ''}">
+          <td class="rk">${i + 1}</td><td class="nm">${esc(r.username)}</td>
+          <td>${r.wins} / ${r.games}</td><td>${pct(r.wins, r.games)}</td><td>${r.avg_vp}</td></tr>`
+        )
+        .join('')}</tbody></table>`;
+  } catch (e) {
+    box.innerHTML = `<p class="empty">${esc(e.message)}</p>`;
+  }
+}
+
+async function loadMine() {
+  const box = $('#htab-mine');
+  if (!box.innerHTML) box.innerHTML = '<p class="empty">加载中…</p>';
+  try {
+    const { stats, recent } = await api('/api/me');
+    const g = stats.games || 0;
+    box.innerHTML = `<dl class="my-stats">
+        <div><dt>对局</dt><dd>${g}</dd></div>
+        <div><dt>胜场</dt><dd>${stats.wins || 0}</dd></div>
+        <div><dt>胜率</dt><dd>${pct(stats.wins, g)}</dd></div>
+        <div><dt>平均分</dt><dd>${stats.avg_vp ?? '—'}</dd></div>
+      </dl>
+      ${
+        recent.length
+          ? `<h3>最近对局</h3><ul class="recent">${recent
+              .map(
+                (m) => `<li class="${m.is_winner ? 'won' : ''}">
+              <span class="rc-rank">${m.is_winner ? '胜' : `第 ${m.rank}`}</span>
+              <span class="rc-main">${m.size} 人地图，${m.players} 人参加，${m.turns} 回合<small>${fmtDate(m.ended_at)}${m.is_winner ? '' : `，${esc(m.winner || '')} 获胜`}</small></span>
+              <span class="rc-vp">${m.vp} 分</span></li>`
+              )
+              .join('')}</ul>`
+          : '<p class="empty">你还没有完成过对局。</p>'
+      }`;
+  } catch (e) {
+    box.innerHTML = `<p class="empty">${esc(e.message)}</p>`;
+  }
 }
 
 function renderRoomList(list) {
@@ -250,20 +392,18 @@ function renderRoomList(list) {
   }
   box.innerHTML = list
     .map(
-      (r) => `<button class="room-row" data-code="${r.code}">
+      (r) => `<button class="room-row ${r.mine ? 'mine' : ''}" data-code="${r.code}">
       <span class="rr-title">${esc(r.title)}</span>
       <span class="rr-meta">${r.size} 人地图</span>
       <span class="rr-count">${r.players}/${r.max}</span>
-      <span class="rr-state ${r.started ? 'on' : ''}">${r.ended ? '已结束' : r.started ? '观战' : '加入'}</span>
+      <span class="rr-state ${r.started && !r.mine ? 'on' : ''}">${r.mine ? (r.ended ? '查看' : '回到对局') : r.ended ? '已结束' : r.started ? '观战' : '加入'}</span>
     </button>`
     )
     .join('');
   $$('.room-row', box).forEach((b) =>
     b.addEventListener('click', () => {
       sound.unlock();
-      S.name = $('#name').value.trim() || S.name;
-      LS.set('catan.name', S.name);
-      send('join', { code: b.dataset.code, name: S.name });
+      send('join', { code: b.dataset.code });
     })
   );
 }
@@ -1304,6 +1444,7 @@ function initGameUI() {
   $('#board').addEventListener('pointerleave', () => ($('#tile-tip').hidden = true));
 }
 
+initLogin();
 initHome();
 initLobby();
 initGameUI();

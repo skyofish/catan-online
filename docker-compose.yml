@@ -8,14 +8,24 @@ services:
       - "${CATAN_PORT:-3000}:3000"
     environment:
       - PORT=3000
+      # 管理员账号密码：写在服务器的 .env 文件里，不要提交到仓库
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       # 电脑玩家每步操作间隔（毫秒）
       - BOT_DELAY_MS=900
       # 玩家掉线多久后由电脑代管（毫秒）
       - AFK_TAKEOVER_MS=60000
       # 最多同时存在的房间数
       - MAX_ROOMS=200
+    volumes:
+      # 数据库（账号、战绩、进行中的对局）保存在这个数据卷里，重建容器不会丢失
+      - catan-data:/app/data
+    stop_grace_period: 15s
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  catan-data:

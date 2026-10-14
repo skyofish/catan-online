@@ -144,10 +144,10 @@ function botAction(g, pid) {
 
 function mainAction(g, p, special) {
   const pid = p.id;
-  g._botActs = g._botActs || {};
   const key = `${g.turnCount}:${pid}`;
-  g._botActs[key] = (g._botActs[key] || 0) + 1;
-  const tooMany = g._botActs[key] > 25;
+  if (!g._botActs || g._botActs.key !== key) g._botActs = { key, n: 0 };
+  g._botActs.n++;
+  const tooMany = g._botActs.n > 25;
 
   if (!tooMany) {
     // 打出发展卡

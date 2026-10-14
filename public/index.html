@@ -51,7 +51,17 @@
     <p>开拓、交易、建造。和朋友在同一座岛上争夺 10 分。</p>
   </header>
   <aside class="ledger">
-    <label class="field"><span>你的名字</span><input id="name" maxlength="16" autocomplete="nickname"></label>
+    <form id="login-form" class="block login-panel" hidden>
+      <h2>登录</h2>
+      <p class="muted">输入管理员为你开通的账号即可进入，不需要密码。</p>
+      <input id="login-name" maxlength="16" autocomplete="username" placeholder="你的账号" aria-label="账号" required>
+      <p id="login-error" class="form-error" role="alert" hidden></p>
+      <button class="btn primary wide" type="submit" id="btn-login">进入卡坦岛</button>
+      <a class="admin-link" href="/admin">管理员入口</a>
+    </form>
+
+    <div id="ledger-main" class="ledger-main" hidden>
+    <div class="userbar"><span class="chip me-chip"></span><b id="me-name"></b><button class="mini ghost" id="btn-logout">退出登录</button></div>
 
     <div class="block">
       <h2>开一座新岛</h2>
@@ -74,8 +84,18 @@
     </div>
 
     <div class="block grow">
-      <div class="block-head"><h2>正在进行</h2><button class="mini ghost" id="btn-refresh">刷新</button></div>
-      <div id="room-list" class="room-list"><p class="empty">正在连接服务器…</p></div>
+      <div class="block-head">
+        <div class="seg" role="tablist" aria-label="首页信息">
+          <button role="tab" data-htab="rooms" aria-selected="true">正在进行</button>
+          <button role="tab" data-htab="rank" aria-selected="false">排行榜</button>
+          <button role="tab" data-htab="mine" aria-selected="false">我的战绩</button>
+        </div>
+        <button class="mini ghost" id="btn-refresh">刷新</button>
+      </div>
+      <div id="htab-rooms" class="htab"><div id="room-list" class="room-list"><p class="empty">正在连接服务器…</p></div></div>
+      <div id="htab-rank" class="htab" hidden></div>
+      <div id="htab-mine" class="htab" hidden></div>
+    </div>
     </div>
   </aside>
 </section>
