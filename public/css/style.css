@@ -707,3 +707,22 @@ body.admin-page { overflow: auto; background-color: var(--sea-deep); background-
   .users .ops .mini { padding: 5px 16px; font-size: 14px; }
   .users-empty { display: block; }
 }
+
+/* ============ 语音 ============ */
+.lobby-head-btns { display: flex; gap: 8px; align-items: center; }
+.vb svg { width: 19px; height: 19px; }
+.vb-spk.off { color: var(--muted); }
+.vb-mic { color: var(--muted); }
+.vb-mic.on { color: #fff; background: #2f7a3a; border-color: #7fd08a; }
+.vb-mic.on.talking { box-shadow: 0 0 0 3px rgba(127, 208, 138, 0.5), 0 0 14px rgba(127, 208, 138, 0.7); }
+.vb-mic.unsupported { opacity: 0.5; }
+.vmic { display: none; width: 14px; height: 14px; flex: none; margin-left: 2px; vertical-align: -2px;
+  background: #7fd08a; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M6 11a6 6 0 0 0 12 0M12 17v4' stroke='black' stroke-width='2.4' fill='none'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M6 11a6 6 0 0 0 12 0M12 17v4' stroke='black' stroke-width='2.4' fill='none'/%3E%3C/svg%3E") center / contain no-repeat; }
+.mic-on .vmic { display: inline-block; }
+.speaking .chip { box-shadow: 0 0 0 3px rgba(127, 208, 138, 0.85), 0 0 12px rgba(127, 208, 138, 0.9); animation: speak 0.6s ease-in-out infinite alternate; }
+@keyframes speak { to { box-shadow: 0 0 0 5px rgba(127, 208, 138, 0.35), 0 0 16px rgba(127, 208, 138, 0.6); } }
+@media (max-width: 860px) {
+  .top-btns { gap: 4px; }
+  .top-btns .icon-btn { width: 32px; height: 32px; }
+}

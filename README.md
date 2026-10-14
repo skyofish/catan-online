@@ -5,6 +5,23 @@
 服务端与前端均为原生 JavaScript，数据保存在 SQLite（Node 内置 `node:sqlite`），
 **没有任何第三方依赖**，不需要 `npm install`。
 
+## 房间语音
+
+进入房间后自动加入该房间的语音频道：**扬声器默认打开，麦克风默认关闭**，
+点右上角的麦克风按钮开始说话；正在说话的玩家头像会发光。
+
+- **声网 Agora（推荐）**：在声网控制台创建项目（鉴权方式选「App ID + Token」），
+  把 App ID 和 App 证书写进服务器的 `.env`：
+  ```bash
+  AGORA_APP_ID=你的AppID
+  AGORA_APP_CERTIFICATE=你的App证书
+  ```
+  服务器会为每位玩家签发 24 小时有效的 Token（证书不会发给浏览器）。
+  声网 Web SDK 在 Docker 构建时下载到本站，玩家从你的服务器加载。
+- **未配置声网时**：使用内置的 WebRTC 点对点语音；跨运营商、手机网络下可能连不通。
+- **麦克风必须在 HTTPS 下使用**：这是浏览器的限制，与语音服务商无关。
+  通过 `http://IP` 访问时只能收听，不能说话。
+
 ## 账号与管理员
 
 - 玩家必须用账号登录才能进入，**账号不需要密码**，由管理员在后台开通。
@@ -94,6 +111,8 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
 | `MAX_ROOMS` | `200` | 同时存在的房间上限 |
 | `ADMIN_USERNAME` | 无 | 管理员账号，未设置时后台无法登录 |
 | `ADMIN_PASSWORD` | 无 | 管理员密码 |
+| `AGORA_APP_ID` | 无 | 声网 App ID，设置后语音走声网 |
+| `AGORA_APP_CERTIFICATE` | 无 | 声网 App 证书，用于签发 Token |
 | `DB_PATH` | `data/catan.db` | 数据库文件位置（Docker 中为 `/app/data/catan.db`） |
 
 健康检查：`GET /health`
@@ -105,7 +124,7 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
   银行 4:1 与 3:1 / 2:1 港口、玩家间报价交易、五种发展卡（本回合买的不能用、每回合限一张）、
   最长道路（含被截断的重新计算）、最大军队、银行资源不足时不发放、目标分数可设 8–14。
 - **6 / 8 人特殊建造阶段**：每名玩家结束回合后，其余玩家依次获得只能建造的机会（可在房间里关闭）。
-- **联机**：房间号 + 邀请链接；刷新或断网后自动重连回到原座位；满员或开局后进入观战；
+- **联机**：房间号 + 邀请链接；刷新、断网或主动离开后都能回到原座位（离开期间电脑代打）；满员或开局后进入观战；
   房主可添加电脑玩家、移出玩家、让离线玩家由电脑代管；结束后一键回到房间再来一局。
 - **动画**：地块落下开场、3D 骰子、产出地块闪光与资源卡飞入手牌、建筑落下弹跳与粒子、
   强盗跳跃移动、偷牌/交易/垄断时卡牌在玩家之间飞行、发展卡翻转展示、回合横幅、
@@ -124,6 +143,7 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
 server/
   index.js   HTTP 静态服务 + 登录 / 管理员 API + 房间管理 + 对局持久化
   db.js      SQLite 数据层（账号、会话、房间快照、战绩）
+  vendor/agora/  声网官方 Token 生成代码（MIT，仅依赖 Node 内置模块）
   ws.js      零依赖 WebSocket 服务端实现（RFC 6455）
   game.js    规则引擎（服务器权威，按玩家隐藏手牌）
   board.js   4/6/8 人地图生成
@@ -132,6 +152,7 @@ public/
   index.html  页面与 SVG 图标
   admin.html  管理员后台
   js/admin.js   后台逻辑
+  js/voice.js   房间语音（声网 / WebRTC 点对点）
   css/style.css
   js/app.js     界面、网络、事件动画编排
   js/board.js   SVG 棋盘渲染与平移缩放

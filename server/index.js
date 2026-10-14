@@ -5,11 +5,13 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { attachWS } = require('./ws');
 const { Game } = require('./game');
 const { LAYOUTS, generateBoard } = require('./board');
 const { botAction } = require('./bot');
 const db = require('./db');
+const { RtcTokenBuilder, Role: AgoraRole } = require('./vendor/agora/src/RtcTokenBuilder2');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -20,11 +22,20 @@ const AFK_TAKEOVER_MS = Number(process.env.AFK_TAKEOVER_MS) || 60000;
 const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 200;
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+// 语音：TURN 中继（coturn）。TURN_HOST 为服务器公网 IP 或域名，TURN_SECRET 与 coturn 的 static-auth-secret 一致
+const TURN_HOST = process.env.TURN_HOST || '';
+const TURN_PORT = Number(process.env.TURN_PORT) || 3478;
+const TURN_SECRET = process.env.TURN_SECRET || '';
+// 语音：声网 Agora（配置后优先使用；否则使用内置的 WebRTC 点对点）
+const AGORA_APP_ID = (process.env.AGORA_APP_ID || '').trim();
+const AGORA_APP_CERTIFICATE = (process.env.AGORA_APP_CERTIFICATE || '').trim();
+const STUN_URLS = (process.env.STUN_URLS || 'stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302').split(',').map((x) => x.trim()).filter(Boolean);
 
 const COLORS = ['#e53935', '#1e88e5', '#fb8c00', '#f5f5f5', '#43a047', '#8e24aa', '#6d4c41', '#00acc1'];
 const BOT_NAMES = ['阿尔法', '贝塔', '伽马', '德尔塔', '艾普西隆', '泽塔', '伊塔', '西塔', '卡帕', '拉姆达'];
 
 db.open(DB_PATH);
+console.log(AGORA_APP_ID ? `语音：声网 Agora${AGORA_APP_CERTIFICATE ? '（Token 鉴权）' : '（仅 App ID，测试模式）'}` : '语音：内置 WebRTC 点对点');
 if (!ADMIN_USERNAME || !ADMIN_PASSWORD) console.warn('⚠️  未设置 ADMIN_USERNAME / ADMIN_PASSWORD，管理员后台无法登录。');
 
 // ======================= HTTP =======================
@@ -246,11 +257,33 @@ const server = http.createServer((req, res) => {
       headers['X-Frame-Options'] = 'DENY';
       headers['Referrer-Policy'] = 'same-origin';
     }
+    // 文本类文件 gzip 压缩（压缩结果按修改时间缓存在内存中）
+    const gz = /gzip/.test(req.headers['accept-encoding'] || '') && /\.(js|css|html|svg|json)$/.test(ext) && st.size > 1024;
+    if (gz) {
+      const key = `${file}:${st.mtimeMs}`;
+      let buf = gzCache.get(key);
+      if (!buf) {
+        try {
+          buf = zlib.gzipSync(fs.readFileSync(file), { level: 6 });
+        } catch {
+          buf = null;
+        }
+        if (buf) gzCache.set(key, buf);
+      }
+      if (buf) {
+        headers['Content-Encoding'] = 'gzip';
+        headers['Content-Length'] = buf.length;
+        headers['Vary'] = 'Accept-Encoding';
+        res.writeHead(200, headers);
+        return res.end(req.method === 'HEAD' ? undefined : buf);
+      }
+    }
     res.writeHead(200, headers);
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
   });
 });
+const gzCache = new Map();
 
 // ======================= 在线连接 =======================
 const userConns = new Map(); // userId -> Set<conn>
@@ -283,7 +316,7 @@ function kickUser(userId, reason) {
       p.autoBot = true;
       systemChat(room, `${p.name} 的账号已停用，由电脑接管`);
     }
-    for (const c of p.conns) c.room = null;
+    for (const c of p.conns) detach(c);
     p.conns.clear();
     broadcast(room);
     scheduleBots(room);
@@ -296,6 +329,70 @@ function kickUser(userId, reason) {
     }
   }
   userConns.delete(userId);
+}
+
+// ======================= 语音（WebRTC 信令） =======================
+function iceServers(userId) {
+  const list = [];
+  if (TURN_HOST) list.push({ urls: [`stun:${TURN_HOST}:${TURN_PORT}`] });
+  else if (STUN_URLS.length) list.push({ urls: STUN_URLS });
+  if (TURN_HOST && TURN_SECRET) {
+    // TURN REST API 临时凭证：24 小时有效
+    const username = `${Math.floor(Date.now() / 1000) + 86400}:${userId}`;
+    const credential = crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64');
+    list.push({ urls: [`turn:${TURN_HOST}:${TURN_PORT}?transport=udp`, `turn:${TURN_HOST}:${TURN_PORT}?transport=tcp`], username, credential });
+  }
+  return list;
+}
+
+function agoraInfo(room, conn) {
+  if (!AGORA_APP_ID) return null;
+  const channel = `catan_${room.code}`;
+  // 有 App 证书时生成 24 小时有效的 Token；仅有 App ID（测试模式项目）时不需要 Token
+  const token = AGORA_APP_CERTIFICATE ? RtcTokenBuilder.buildTokenWithUid(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel, conn.voiceUid, AgoraRole.PUBLISHER, 86400, 86400) : null;
+  return { appId: AGORA_APP_ID, channel, token, uid: conn.voiceUid };
+}
+
+function voiceEntry(room, conn) {
+  const p = room.players.find((x) => x.conns.has(conn));
+  return { cid: conn.cid, uid: conn.voiceUid, pid: p ? p.id : null, name: p ? p.name : conn.user.username, color: p ? p.color : '#999', muted: conn.voiceMuted !== false };
+}
+
+function sendVoiceRoster(room, initiator = null) {
+  if (!room.voice) return;
+  const peers = [...room.voice].map((c) => voiceEntry(room, c));
+  for (const c of room.voice) {
+    c.send({
+      t: 'voice',
+      d: AGORA_APP_ID
+        ? { self: c.cid, peers, agora: c === initiator ? agoraInfo(room, c) : undefined }
+        : { self: c.cid, peers, initiate: c === initiator ? peers.filter((x) => x.cid !== c.cid).map((x) => x.cid) : [], ice: c === initiator ? iceServers(c.user.id) : undefined },
+    });
+  }
+}
+
+function voiceAdd(room, conn) {
+  if (conn.voiceRoom === room.code) return sendVoiceRoster(room);
+  voiceRemove(conn);
+  room.voice = room.voice || new Set();
+  room.voice.add(conn);
+  conn.voiceRoom = room.code;
+  conn.voiceMuted = true; // 麦克风默认关闭
+  sendVoiceRoster(room, conn);
+}
+
+function voiceRemove(conn) {
+  const room = conn.voiceRoom && rooms.get(conn.voiceRoom);
+  conn.voiceRoom = null;
+  if (!room || !room.voice || !room.voice.delete(conn)) return;
+  conn.send({ t: 'voice', d: { self: conn.cid, peers: [], initiate: [] } });
+  sendVoiceRoster(room);
+}
+
+// 让连接离开房间（不触发离开逻辑），同时退出语音
+function detach(conn) {
+  voiceRemove(conn);
+  conn.room = null;
 }
 
 // ======================= 房间 =======================
@@ -348,7 +445,16 @@ function roomFromJSON(d) {
     gameId: d.gameId,
     recorded: !!d.recorded,
     lastActive: now, // 重启后给 30 分钟的重连宽限
-    players: d.players.map((p) => ({ ...p, conns: new Set(), lastSeen: now })),
+    players: d.players.map((p) => {
+      const q = { ...p, conns: new Set(), lastSeen: now };
+      // 旧版本中主动离开的玩家被永久换成电脑；迁移为可接回的代管状态
+      if (q.isBot && q.userId) {
+        q.isBot = false;
+        q.autoBot = true;
+        q.name = q.name.replace(/\(电脑\)$/, '');
+      }
+      return q;
+    }),
     spectators: new Set(),
     game: d.game ? Game.fromJSON(d.game) : null,
     botTimer: null,
@@ -371,6 +477,7 @@ setInterval(flushRooms, 1500).unref();
 
 function removeRoom(room) {
   clearTimeout(room.botTimer);
+  for (const c of room.voice || []) c.voiceRoom = null;
   rooms.delete(room.code);
   dirty.delete(room.code);
   db.deleteRoom(room.code);
@@ -548,7 +655,7 @@ function checkAfk(room) {
 
 function leaveRoom(conn) {
   const room = conn.room && rooms.get(conn.room);
-  conn.room = null;
+  detach(conn);
   if (!room) return;
   room.spectators.delete(conn);
   const p = room.players.find((x) => x.conns.has(conn));
@@ -559,13 +666,13 @@ function leaveRoom(conn) {
       if (!room.game) {
         room.players = room.players.filter((x) => x !== p);
         systemChat(room, `${p.name} 离开了房间`);
-      } else if (room.game.phase !== 'ended') {
-        p.isBot = true;
-        p.name = p.name + '(电脑)';
-        systemChat(room, `${p.name.replace('(电脑)', '')} 退出了游戏，由电脑接管`);
+      } else if (room.game.phase !== 'ended' && !p.conns.size) {
+        // 主动离开：电脑临时代管，玩家随时可以回来接手
+        p.autoBot = true;
+        systemChat(room, `${p.name} 暂时离开，由电脑代管。回到对局后自动恢复。`);
       }
-      if (room.host === p.id) {
-        const nh = room.players.find((x) => !x.isBot);
+      if (room.host === p.id && !p.conns.size) {
+        const nh = room.players.find((x) => !x.isBot && x.conns.size) || room.players.find((x) => !x.isBot);
         room.host = nh ? nh.id : null;
       }
     }
@@ -685,6 +792,7 @@ const handlers = {
     conn.send({ t: 'chatHistory', d: room.chat });
     conn.boardFor = null;
     broadcast(room);
+    voiceAdd(room, conn);
     scheduleBots(room);
   },
 
@@ -727,7 +835,7 @@ const handlers = {
     if (!p || p.id === room.host) return;
     room.players = room.players.filter((x) => x !== p);
     for (const c of p.conns) {
-      c.room = null;
+      detach(c);
       c.send({ t: 'left', d: { kicked: true } });
     }
     systemChat(room, `${p.name} 被移出房间`);
@@ -741,6 +849,7 @@ const handlers = {
     if (room.players.some((x) => x !== me && x.color === d.color)) throw new Error('该颜色已被使用');
     me.color = d.color;
     broadcast(room);
+    sendVoiceRoster(room);
   },
 
   start(conn) {
@@ -770,7 +879,7 @@ const handlers = {
     for (const c of [...room.spectators]) {
       if (room.players.length >= LAYOUTS[room.size].maxPlayers) break;
       room.spectators.delete(c);
-      c.room = null;
+      detach(c);
       handlers.join(c, { code: room.code });
     }
     broadcast(room);
@@ -795,6 +904,32 @@ const handlers = {
     if (!r.ok) throw new Error(r.error);
     broadcast(room, r.events);
     scheduleBots(room, r.events.some((e) => e.type === 'roll') ? BOT_DELAY * 1.6 : BOT_DELAY);
+  },
+
+  // WebRTC 信令转发：只在同一房间的语音成员之间
+  rtc(conn, d) {
+    const room = conn.voiceRoom && rooms.get(conn.voiceRoom);
+    if (!room || !room.voice) return;
+    if (!['offer', 'answer', 'ice'].includes(d.kind)) return;
+    const target = [...room.voice].find((c) => c.cid === d.to);
+    if (!target) return;
+    const data = JSON.stringify(d.data || null);
+    if (data.length > 64 * 1024) return;
+    target.send({ t: 'rtc', d: { from: conn.cid, kind: d.kind, data: d.data } });
+  },
+
+  // 声网 Token 即将过期时续期
+  voiceToken(conn) {
+    const room = conn.voiceRoom && rooms.get(conn.voiceRoom);
+    if (!room || !AGORA_APP_ID) return;
+    conn.send({ t: 'voiceToken', d: agoraInfo(room, conn) });
+  },
+
+  voiceState(conn, d) {
+    const room = conn.voiceRoom && rooms.get(conn.voiceRoom);
+    if (!room) return;
+    conn.voiceMuted = !!d.muted;
+    sendVoiceRoster(room);
   },
 
   chat(conn, d) {
@@ -822,12 +957,12 @@ function ctx(conn, hostOnly = false) {
 }
 
 attachWS(server, '/ws', (conn) => {
+  conn.cid = rid(6);
+  conn.voiceUid = crypto.randomInt(1, 2 ** 31 - 1);
   conn.msgTimes = [];
+  conn.rtcTimes = [];
   conn.on('message', (raw) => {
     const now = Date.now();
-    conn.msgTimes = conn.msgTimes.filter((t) => now - t < 1000);
-    if (conn.msgTimes.length > 30) return;
-    conn.msgTimes.push(now);
     let m;
     try {
       m = JSON.parse(raw);
@@ -835,6 +970,12 @@ attachWS(server, '/ws', (conn) => {
       return;
     }
     if (!m || typeof m.t !== 'string') return;
+    // 限流：语音信令（ICE 候选会在建立连接时集中到达）单独计数
+    const bucket = m.t === 'rtc' ? 'rtcTimes' : 'msgTimes';
+    const limit = m.t === 'rtc' ? 300 : 30;
+    conn[bucket] = conn[bucket].filter((t) => now - t < 1000);
+    if (conn[bucket].length > limit) return;
+    conn[bucket].push(now);
     const h = handlers[m.t];
     if (!h) return;
     if (m.t !== 'hello' && !conn.user) return conn.send({ t: 'auth', d: { ok: false } });
@@ -847,6 +988,7 @@ attachWS(server, '/ws', (conn) => {
   conn.on('close', () => {
     if (shuttingDown) return;
     leaveRoom(conn);
+    voiceRemove(conn);
     untrackConn(conn);
   });
 });

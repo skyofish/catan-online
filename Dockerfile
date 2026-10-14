@@ -1,4 +1,4 @@
-# 卡坦岛在线版：零第三方依赖，数据保存在 SQLite（Node 内置 node:sqlite）
+# 卡坦岛在线版：零第三方 npm 依赖，数据保存在 SQLite（Node 内置 node:sqlite）
 FROM node:22-alpine
 
 ENV NODE_ENV=production \
@@ -7,6 +7,15 @@ ENV NODE_ENV=production \
     DB_PATH=/app/data/catan.db
 
 WORKDIR /app
+
+# 声网语音 Web SDK：构建时下载到本站，玩家从本服务器加载（下载失败时网页会改用公共 CDN）
+ARG AGORA_SDK_VERSION=4.24.2
+RUN mkdir -p /app/public/vendor && \
+    (wget -qO- "https://registry.npmjs.org/agora-rtc-sdk-ng/-/agora-rtc-sdk-ng-${AGORA_SDK_VERSION}.tgz" \
+       | tar -xzO package/AgoraRTC_N-production.js > /app/public/vendor/AgoraRTC_N.js \
+     && test -s /app/public/vendor/AgoraRTC_N.js \
+     || (echo "⚠️  声网 SDK 下载失败，将使用公共 CDN" && rm -f /app/public/vendor/AgoraRTC_N.js))
+
 COPY package.json ./
 COPY server ./server
 COPY public ./public

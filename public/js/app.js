@@ -1,6 +1,7 @@
 import { sound } from './audio.js';
 import { BoardView, RES_LIST, RES_NAME, TERRAIN_NAME } from './board.js';
 import * as fx from './fx.js';
+import { Voice } from './voice.js';
 
 // ======================= 基础 =======================
 const $ = (s, r = document) => r.querySelector(s);
@@ -68,6 +69,8 @@ const S = {
   seenSlots: new Set(),
 };
 window.__S = S;
+const voice = new Voice({ send: (t, d) => S.ws && S.ws.readyState === 1 && S.ws.send(JSON.stringify({ t, d })), onChange: () => renderVoice(), toast: (m, k) => toast(m, k) });
+window.__voice = voice;
 
 // ======================= 网络 =======================
 function connect() {
@@ -123,6 +126,7 @@ async function api(path, { method = 'GET', body } = {}) {
 }
 
 function signedOut(reason) {
+  voice.leave();
   S.session = null;
   S.user = null;
   LS.set('catan.session', null);
@@ -157,6 +161,15 @@ function onMessage(t, d) {
     case 'rooms':
       renderRoomList(d);
       break;
+    case 'voice':
+      voice.handleRoster(d);
+      break;
+    case 'rtc':
+      voice.handleSignal(d);
+      break;
+    case 'voiceToken':
+      voice.agoraRenew(d);
+      break;
     case 'room':
       S.queue = S.queue.then(() => applyRoom(d)).catch((e) => console.error(e));
       break;
@@ -190,6 +203,7 @@ function onMessage(t, d) {
       toast(d.msg);
       break;
     case 'left':
+      voice.leave();
       S.room = null;
       S.game = null;
       S.board = null;
@@ -491,14 +505,15 @@ function renderLobby() {
     }
     const isNew = !S.seenSlots.has(p.id);
     S.seenSlots.add(p.id);
-    slots.push(`<li class="slot ${p.id === S.you ? 'me' : ''} ${p.connected ? '' : 'off'} ${isNew ? 'new' : ''}">
+    slots.push(`<li class="slot ${p.id === S.you ? 'me' : ''} ${p.connected ? '' : 'off'} ${isNew ? 'new' : ''}" data-pid="${p.id}">
       <span class="chip" style="--pc:${p.color}"></span>
-      <span class="pn">${esc(p.name)}${p.id === r.host ? '<em class="tag host">房主</em>' : ''}${p.id === S.you ? '<em class="tag">你</em>' : ''}${p.connected ? '' : '<em class="tag off">离线</em>'}</span>
+      <span class="pn">${esc(p.name)}${p.id === r.host ? '<em class="tag host">房主</em>' : ''}${p.id === S.you ? '<em class="tag">你</em>' : ''}${p.connected ? '' : '<em class="tag off">离线</em>'}<span class="vmic" title="麦克风已打开"></span></span>
       ${isHost && p.id !== r.host ? `<button class="mini ghost" data-kick="${p.id}" aria-label="移出 ${esc(p.name)}">移出</button>` : ''}
     </li>`);
   }
   $('#lobby-players').innerHTML = slots.join('');
   $$('[data-kick]').forEach((b) => b.addEventListener('click', () => send('kick', { pid: b.dataset.kick })));
+  renderVoice();
   $('#lobby-count').textContent = `${r.players.length} / ${r.max}`;
 
   // 颜色选择
@@ -664,10 +679,10 @@ function renderPlayers() {
       const lr = g.longestRoad === p.id;
       const la = g.largestArmy === p.id;
       const disc = g.discardPending[p.id];
-      return `<li class="pl ${active ? 'active' : ''} ${p.id === S.you ? 'me' : ''} ${room.connected === false ? 'off' : ''} ${g.winner === p.id ? 'winner' : ''}" id="pl-${p.id}" style="--pc:${p.color}">
+      return `<li data-pid="${p.id}" class="pl ${active ? 'active' : ''} ${p.id === S.you ? 'me' : ''} ${room.connected === false ? 'off' : ''} ${g.winner === p.id ? 'winner' : ''}" id="pl-${p.id}" style="--pc:${p.color}">
         <div class="pl-top">
           <span class="chip"></span>
-          <span class="pl-name">${esc(p.name)}</span>
+          <span class="pl-name">${esc(p.name)}</span><span class="vmic" title="麦克风已打开"></span>
           ${room.isBot ? '<em class="tag">电脑</em>' : ''}${room.autoBot ? '<em class="tag off">代管</em>' : ''}${room.connected === false && !room.autoBot ? '<em class="tag off">离线</em>' : ''}
           <span class="vp" title="胜利点">${p.vp}<small>分</small></span>
         </div>
@@ -683,6 +698,7 @@ function renderPlayers() {
     })
     .join('');
   $$('[data-takeover]').forEach((b) => b.addEventListener('click', () => send('takeover', { pid: b.dataset.takeover })));
+  renderVoice();
 }
 
 function renderHand() {
@@ -1351,6 +1367,38 @@ function openRules() {
   );
 }
 
+// ======================= 语音 =======================
+function renderVoice() {
+  const st = voice.stateByPid();
+  for (const el of $$('#players .pl, #lobby-players .slot')) {
+    const pid = el.dataset.pid || el.id.replace(/^pl-/, '');
+    const v = st[pid];
+    el.classList.toggle('mic-on', !!(v && !v.muted));
+    el.classList.toggle('speaking', !!(v && v.speaking));
+  }
+  const n = voice.listeners();
+  for (const b of $$('.vb-spk')) {
+    b.classList.toggle('off', !voice.speakerOn);
+    b.setAttribute('aria-pressed', voice.speakerOn);
+    b.title = voice.speakerOn ? `扬声器已开（语音频道 ${n} 人），点击静音` : '扬声器已关闭，点击收听';
+    b.querySelector('use').setAttribute('href', voice.speakerOn ? '#ic-spk' : '#ic-spk-off');
+  }
+  for (const b of $$('.vb-mic')) {
+    b.classList.toggle('on', voice.micOn);
+    b.classList.toggle('talking', voice.selfSpeaking);
+    b.classList.toggle('unsupported', !voice.micSupported);
+    b.setAttribute('aria-pressed', voice.micOn);
+    b.title = !voice.micSupported ? '麦克风需要 HTTPS 才能使用' : voice.micOn ? '麦克风已打开，点击关闭' : '麦克风已关闭，点击开始说话';
+    b.querySelector('use').setAttribute('href', voice.micOn ? '#ic-mic' : '#ic-mic-off');
+  }
+}
+
+function initVoiceUI() {
+  for (const b of $$('.vb-spk')) b.addEventListener('click', () => (sound.unlock(), voice.toggleSpeaker()));
+  for (const b of $$('.vb-mic')) b.addEventListener('click', () => (sound.unlock(), voice.toggleMic()));
+  renderVoice();
+}
+
 // ======================= 提示 =======================
 function toast(msg, kind = '') {
   const root = $('#toast-root');
@@ -1373,7 +1421,7 @@ function initGameUI() {
     const g = S.game;
     const playing = g && g.phase !== 'ended' && me();
     const root = openModal(
-      `<h2>离开游戏？</h2><p class="muted">${playing ? '离开后你的位置将由电脑接管，无法再回来。若只是刷新页面，可以直接重新打开链接继续。' : '你将返回首页。'}</p>
+      `<h2>离开游戏？</h2><p class="muted">${playing ? '离开期间由电脑替你操作。之后在首页点「回到对局」，或重新打开邀请链接，就能接回自己的位置。' : '你将返回首页。'}</p>
       <div class="modal-actions"><button class="btn ghost" data-close>留下</button><button class="btn danger" id="leave-ok">离开</button></div>`,
       { cls: 'confirm' }
     );
@@ -1454,6 +1502,7 @@ function initGameUI() {
 }
 
 initLogin();
+initVoiceUI();
 initHome();
 initLobby();
 initGameUI();

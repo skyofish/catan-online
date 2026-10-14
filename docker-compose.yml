@@ -11,6 +11,9 @@ services:
       # 管理员账号密码：写在服务器的 .env 文件里，不要提交到仓库
       - ADMIN_USERNAME=${ADMIN_USERNAME:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # 声网语音：在声网控制台创建项目后获得，同样写在 .env 里
+      - AGORA_APP_ID=${AGORA_APP_ID:-}
+      - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE:-}
       # 电脑玩家每步操作间隔（毫秒）
       - BOT_DELAY_MS=900
       # 玩家掉线多久后由电脑代管（毫秒）

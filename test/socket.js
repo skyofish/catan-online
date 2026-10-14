@@ -115,9 +115,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     g.send('join', { code });
     await a.wait((m) => m.t === 'room' && m.d.room.players.length === 3);
     assert.deepStrictEqual(a.state.room.players.map((p) => p.name).sort(), ['小红', '小绿', '小蓝'], '玩家名应为账号名');
+    const vr = (await a.wait((m) => m.t === 'voice' && m.d.peers.length === 3)).d;
+    assert.ok(vr.peers.every((x) => x.muted && x.uid > 0), '语音：所有人默认静音，并分配了 uid');
     a.send('start');
     await a.wait((m) => m.t === 'room' && m.d.game);
-    console.log('✓ 用账号建房、加入、开局');
+    console.log('✓ 用账号建房、加入、开局，自动进入语音频道（默认静音）');
+
+    // ---------- 主动离开后回到对局，恢复手动操作 ----------
+    b.send('leave');
+    await b.wait((m) => m.t === 'left');
+    await a.wait((m) => m.t === 'room' && m.d.room.players.find((p) => p.name === '小蓝')?.autoBot);
+    b.msgs = [];
+    b.send('join', { code });
+    const back = (await b.wait((m) => m.t === 'room' && m.d.game)).d;
+    assert.ok(back.you, '回到对局应是玩家而不是观战者');
+    assert.strictEqual(back.room.players.find((p) => p.id === back.you).autoBot, false, '回来后应恢复手动操作');
+    assert.ok(back.game.me, '应能看到自己的可操作信息');
+    console.log('✓ 主动离开后回到对局，恢复手动操作');
 
     // ---------- 禁用账号：强制下线并由电脑接管 ----------
     await http('PATCH', `/api/admin/users/${uid('小绿')}`, { enabled: false }, adm);
