@@ -31,10 +31,20 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
+          missing=""
+          [ -z "$SSH_HOST" ] && missing="$missing SSH_HOST"
+          [ -z "$SSH_KEY" ] && missing="$missing SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::缺少仓库 Secrets:$missing。请在 Settings → Secrets and variables → Actions 中添加后重新运行。"
+            exit 1
+          fi
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          if ! ssh-keyscan -T 15 -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+            echo "::error::无法连接 $SSH_HOST:$SSH_PORT，请检查服务器是否运行、防火墙是否放行 SSH 端口。"
+            exit 1
+          fi
 
       - name: 在服务器上拉取代码并重启
         env:
