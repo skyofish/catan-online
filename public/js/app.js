@@ -554,6 +554,12 @@ const board = new BoardView($('#board'), {
     if (S.game.phase !== 'setup' && S.game.sub !== 'roadBuilding') S.mode = null;
   },
   tile: (id) => act('robber', { tile: id }),
+  select: (on) => {
+    const [, , hint] = currentHotspots();
+    $('#hint').textContent = on ? '已选中，再点一次确认' : hint || '';
+    $('#hint').hidden = !on && !hint;
+    if (on) sound.play('click');
+  },
 });
 
 const me = () => S.game && S.game.players.find((p) => p.id === S.you);
@@ -584,7 +590,7 @@ function currentHotspots() {
   if (!g || !g.me || !m || g.phase === 'ended') return [null];
   const L = g.me.legal;
   if (g.phase === 'setup' && isMyTurn()) {
-    return g.sub === 'settlement' ? ['vertex', L.settlements, '放置你的第 ' + g.setupRound + ' 个村庄（点击发光的路口）'] : ['edge', L.roads, '为刚放下的村庄连一条道路'];
+    return g.sub === 'settlement' ? ['vertex', L.settlements, '放置你的第 ' + g.setupRound + ' 个村庄（点击发光的路口' + (board.isTouch() ? '，再点一次确认）' : '）')] : ['edge', L.roads, '为刚放下的村庄连一条道路'];
   }
   if (g.sub === 'roadBuilding' && isMyTurn()) return ['edge', L.roads, `道路建设：再放置 ${g.freeRoads} 条免费道路`];
   if (g.sub === 'robber' && isMyTurn()) return ['tile', S.board.tiles.filter((t) => t.id !== g.robber).map((t) => t.id), '移动强盗：点击一块地形'];
@@ -1351,7 +1357,10 @@ function toast(msg, kind = '') {
   const t = document.createElement('div');
   t.className = `toast ${kind}`;
   t.textContent = msg;
+  // 相同提示不重复堆叠；最多同时显示 2 条
+  for (const old of root.children) if (old.textContent === msg) old.remove();
   root.appendChild(t);
+  while (root.children.length > 2) root.firstChild.remove();
   setTimeout(() => t.classList.add('out'), 2800);
   setTimeout(() => t.remove(), 3300);
 }

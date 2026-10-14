@@ -150,7 +150,7 @@ export class BoardView {
 
     const xs = board.vertices.map((v) => v.x * S);
     const ys = board.vertices.map((v) => v.y * S);
-    const pad = S * 1.3;
+    const pad = S * (window.innerWidth < 600 ? 0.95 : 1.3);
     const minX = Math.min(...xs) - pad;
     const minY = Math.min(...ys) - pad;
     this.home = { x: minX, y: minY, w: Math.max(...xs) + pad - minX, h: Math.max(...ys) + pad - minY };
@@ -282,21 +282,29 @@ export class BoardView {
     this.prevRobber = game.robber;
   }
 
-  // 可点击位置
+  // 可点击位置。触屏上路口和道路需要“点一下选中、再点一下确认”，避免误建。
   setHotspots(kind, ids, color) {
     const H = this.layers.hot;
     H.textContent = '';
+    const keep = this.selected ? this.selected.key : null; // 状态刷新时保留选中
+    this.hots = [];
+    this.selected = null;
     this.svg.classList.toggle('placing', !!kind);
     if (!kind || !this.board) return;
     const B = this.board;
+    const add = (g, x, y, fire, confirm, key) => {
+      const h = { g, x, y, fire, confirm, key };
+      this.hots.push(h);
+      g.addEventListener('click', (ev) => this.hit(ev, () => this.pick(h)));
+      g.addEventListener('keydown', (ev) => ev.key === 'Enter' && fire());
+    };
     if (kind === 'vertex' || kind === 'city') {
       for (const id of ids) {
         const v = B.vertices[id];
         const g = el('g', { class: 'hot hot-v', transform: `translate(${v.x * S},${v.y * S})`, tabindex: 0, role: 'button', 'aria-label': kind === 'city' ? '升级为城市' : '在此建造' }, H);
-        el('circle', { r: 16, fill: 'transparent' }, g);
+        el('circle', { r: 25, fill: 'transparent' }, g);
         el('circle', { r: kind === 'city' ? 14 : 9, class: 'ring', stroke: color, fill: kind === 'city' ? 'none' : color }, g);
-        g.addEventListener('click', (ev) => this.hit(ev, () => this.handlers.vertex(id)));
-        g.addEventListener('keydown', (ev) => ev.key === 'Enter' && this.handlers.vertex(id));
+        add(g, v.x * S, v.y * S, () => this.handlers.vertex(id), true, kind + id);
       }
     } else if (kind === 'edge') {
       for (const id of ids) {
@@ -307,10 +315,9 @@ export class BoardView {
         const my = ((a.y + b.y) / 2) * S;
         const ang = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
         const g = el('g', { class: 'hot hot-e', transform: `translate(${mx},${my}) rotate(${ang})`, tabindex: 0, role: 'button', 'aria-label': '在此修路' }, H);
-        el('rect', { x: -24, y: -10, width: 48, height: 20, fill: 'transparent' }, g);
+        el('rect', { x: -21, y: -14, width: 42, height: 28, fill: 'transparent' }, g);
         el('rect', { x: -18, y: -4, width: 36, height: 8, rx: 4, class: 'ring', fill: color, stroke: color }, g);
-        g.addEventListener('click', (ev) => this.hit(ev, () => this.handlers.edge(id)));
-        g.addEventListener('keydown', (ev) => ev.key === 'Enter' && this.handlers.edge(id));
+        add(g, mx, my, () => this.handlers.edge(id), true, 'e' + id);
       }
     } else if (kind === 'tile') {
       for (const id of ids) {
@@ -318,10 +325,59 @@ export class BoardView {
         const g = el('g', { class: 'hot hot-t', transform: `translate(${t.x * S},${t.y * S})`, tabindex: 0, role: 'button', 'aria-label': '把强盗移到这里' }, H);
         el('polygon', { points: hexPoints(0, 0, S * 0.9), class: 'ring' }, g);
         el('circle', { r: 12, class: 'dot' }, g);
-        g.addEventListener('click', (ev) => this.hit(ev, () => this.handlers.tile(id)));
-        g.addEventListener('keydown', (ev) => ev.key === 'Enter' && this.handlers.tile(id));
+        add(g, t.x * S, t.y * S, () => this.handlers.tile(id), false, 't' + id);
       }
     }
+    if (keep) {
+      const h = this.hots.find((x) => x.key === keep);
+      if (h) this.select(h);
+    }
+  }
+
+  isTouch() {
+    return window.matchMedia('(pointer: coarse)').matches;
+  }
+
+  pick(h) {
+    if (!h.confirm || !this.isTouch() || this.selected === h) {
+      this.select(null);
+      return h.fire();
+    }
+    this.select(h);
+  }
+
+  select(h) {
+    if (this.selected) this.selected.g.classList.remove('sel');
+    this.selected = h;
+    if (h) {
+      h.g.classList.add('sel');
+      h.g.parentNode.appendChild(h.g); // 置于最上层
+    }
+    if (this.handlers.select) this.handlers.select(!!h);
+  }
+
+  // 触屏：点在空白处时，选中附近最近的可建造位置
+  snap(ev) {
+    if (!this.hots || !this.hots.length || !this.isTouch() || this.dragMoved) return;
+    if (!this.hots[0].confirm) return;
+    const m = this.svg.getScreenCTM();
+    if (!m) return;
+    const pt = this.svg.createSVGPoint();
+    pt.x = ev.clientX;
+    pt.y = ev.clientY;
+    const p = pt.matrixTransform(m.inverse());
+    let best = null;
+    let bd = Infinity;
+    for (const h of this.hots) {
+      const d = Math.hypot(h.x - p.x, h.y - p.y);
+      if (d < bd) {
+        bd = d;
+        best = h;
+      }
+    }
+    // 屏幕距离 36px 以内才吸附
+    if (best && bd * m.a <= 36) this.select(best);
+    else this.select(null);
   }
 
   hit(ev, fn) {
@@ -465,5 +521,6 @@ export class BoardView {
     svg.addEventListener('pointerup', up);
     svg.addEventListener('pointercancel', up);
     window.addEventListener('resize', () => this.fit());
+    svg.addEventListener('click', (e) => this.snap(e));
   }
 }

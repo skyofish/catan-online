@@ -83,12 +83,12 @@ function render() {
     .map(
       (u) => `<tr class="${u.enabled ? '' : 'disabled'}" data-id="${u.id}">
       <td class="uname">${esc(u.username)}</td>
-      <td><span class="pill ${u.enabled ? 'on' : 'off'}">${u.enabled ? '启用' : '已禁用'}</span></td>
-      <td>${u.online ? '<span class="online-dot"></span>在线' : '<span class="muted">—</span>'}</td>
-      <td>${u.games}</td>
-      <td>${u.wins}</td>
-      <td>${fmt(u.last_login_at)}</td>
-      <td>${fmt(u.created_at)}</td>
+      <td class="state"><span class="pill ${u.enabled ? 'on' : 'off'}">${u.enabled ? '启用' : '已禁用'}</span></td>
+      <td class="meta online" data-label="在线">${u.online ? '<span class="online-dot"></span>在线' : '<span class="muted">—</span>'}</td>
+      <td class="meta" data-label="对局">${u.games}</td>
+      <td class="meta" data-label="胜场">${u.wins}</td>
+      <td class="meta" data-label="最后登录">${fmt(u.last_login_at)}</td>
+      <td class="meta" data-label="创建">${fmt(u.created_at)}</td>
       <td class="ops">
         <button class="mini" data-toggle="${u.id}">${u.enabled ? '禁用' : '启用'}</button>
         <button class="mini danger" data-del="${u.id}">删除</button>

@@ -418,6 +418,9 @@ body.my-turn .status { color: #ffe39a; }
 .hot-t .dot { fill: rgba(30, 20, 30, 0.6); stroke: #ffb4a6; stroke-width: 2; }
 .hot-t:hover .ring { fill: rgba(194, 65, 45, 0.35); }
 @keyframes hot-pulse { 50% { opacity: 0.35; } }
+.hot.sel .ring { animation: none; opacity: 1; stroke: #fff; stroke-width: 4; fill-opacity: 1; }
+.hot-v.sel .ring { transform: scale(1.7); transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 6px #fff); }
+.hot-e.sel .ring { transform: scale(1.25, 1.8); transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 6px #fff); }
 
 /* ============ 动画层 ============ */
 #fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
@@ -563,15 +566,19 @@ body.offline:not([data-screen=loading]) .conn-lost { transform: none; }
   .home-title { padding: 24px 20px 10px; }
   .ledger { grid-column: 1; height: auto; border-left: 0; border-radius: 16px 16px 0 0; min-height: 70vh; }
   .lobby-grid { grid-template-columns: 1fr; }
-  #screen-game { grid-template-columns: 1fr; grid-template-rows: 48px 1fr auto; grid-template-areas: 'top' 'board' 'dock'; }
+  #screen-game { grid-template-columns: 1fr; grid-template-rows: 78px 1fr auto; grid-template-areas: 'top' 'board' 'dock'; }
   .topbar { gap: 8px; padding: 0 8px; }
   .room-tag { display: none; }
-  .status { font-size: 14px; }
+  .topbar { flex-wrap: wrap; align-content: center; row-gap: 4px; padding: 4px 8px; }
+  .status { order: 10; flex: 1 1 100%; font-size: 14px; white-space: normal; line-height: 1.3; padding-left: 8px; max-height: 2.6em; overflow: hidden; }
+  .dice-mini { margin-left: auto; }
+  #toast-root { top: 86px; bottom: auto; width: calc(100% - 32px); }
+  .toast { max-width: 100%; text-align: center; }
   .dice-mini { font-size: 20px; }
-  .left { position: fixed; left: 0; top: 48px; bottom: 0; width: 250px; transform: translateX(-100%); transition: transform 0.3s; z-index: 30; box-shadow: var(--shadow); }
+  .left { position: fixed; left: 0; top: 78px; bottom: 0; width: 250px; transform: translateX(-100%); transition: transform 0.3s; z-index: 30; box-shadow: var(--shadow); }
   body.players-open .left { transform: none; }
   #toggle-players.only-narrow { display: inline-grid !important; }
-  .right { top: 48px; }
+  .right { top: 78px; }
   .dock { flex-wrap: wrap; gap: 8px; padding: 8px; }
   .hcard, .devcard { width: 52px; height: 68px; }
   .hcard .ico { width: 26px; height: 26px; }
@@ -640,7 +647,7 @@ body.offline:not([data-screen=loading]) .conn-lost { transform: none; }
 .rc-vp { font-family: Georgia, serif; color: var(--parch); }
 
 /* ============ 管理员页面 ============ */
-body.admin-page { overflow: auto; background: radial-gradient(ellipse at 30% 0%, var(--sea-light), var(--sea-deep) 70%) fixed; min-height: 100%; }
+body.admin-page { overflow: auto; background-color: var(--sea-deep); background-image: radial-gradient(ellipse at 30% 0%, var(--sea-light), var(--sea-deep) 70%); background-attachment: fixed; min-height: 100%; }
 .admin { max-width: 1040px; margin: 0 auto; padding: 28px 20px 60px; display: flex; flex-direction: column; gap: 18px; }
 .admin-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .admin-head h1 { font-size: 30px; color: var(--parch); }
@@ -681,3 +688,22 @@ body.admin-page { overflow: auto; background: radial-gradient(ellipse at 30% 0%,
   .table-head input { width: 100%; }
 }
 .admin-stack { display: flex; flex-direction: column; gap: 18px; }
+
+/* 管理员页面：手机上把表格行改为卡片 */
+@media (max-width: 640px) {
+  .admin-bar .counts { flex-basis: 100%; }
+  .users { min-width: 0; }
+  .users thead { display: none; }
+  .users tbody, .users tr { display: block; }
+  .users tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 12px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+  .users td { padding: 0; border: 0; }
+  .users .uname { flex: 1 0 calc(100% - 96px); font-size: 16px; white-space: normal; word-break: break-all; }
+  .users .state { text-align: right; }
+  .users .meta.online:has(.muted) { display: none; }
+  .users .meta { font-size: 12px; color: var(--muted); }
+  .users .meta::before { content: attr(data-label) ' '; }
+  .users .meta.online::before { content: ''; }
+  .users .ops { flex-basis: 100%; margin-top: 4px; justify-content: flex-start; }
+  .users .ops .mini { padding: 5px 16px; font-size: 14px; }
+  .users-empty { display: block; }
+}
