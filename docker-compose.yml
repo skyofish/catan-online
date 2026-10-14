@@ -5,7 +5,8 @@ services:
     container_name: catan-online
     restart: unless-stopped
     ports:
-      - "${CATAN_PORT:-3000}:3000"
+      # 启用 HTTPS 时在 .env 中设置 CATAN_BIND=127.0.0.1、CATAN_PORT=3000，只对本机开放，由 Caddy 对外
+      - "${CATAN_BIND:-0.0.0.0}:${CATAN_PORT:-3000}:3000"
     environment:
       - PORT=3000
       # 管理员账号密码：写在服务器的 .env 文件里，不要提交到仓库
@@ -14,6 +15,8 @@ services:
       # 声网语音：在声网控制台创建项目后获得，同样写在 .env 里
       - AGORA_APP_ID=${AGORA_APP_ID:-}
       - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE:-}
+      # 经 Caddy 反向代理时，用 X-Forwarded-For 识别真实 IP（用于登录限流）
+      - TRUST_PROXY=${TRUST_PROXY:-}
       # 电脑玩家每步操作间隔（毫秒）
       - BOT_DELAY_MS=900
       # 玩家掉线多久后由电脑代管（毫秒）
@@ -30,5 +33,30 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # HTTPS（可选）：在 .env 中设置 COMPOSE_PROFILES=https 和 PUBLIC_IP 后启用
+  caddy:
+    image: caddy:2.11-alpine
+    container_name: catan-caddy
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - catan
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - PUBLIC_IP=${PUBLIC_IP:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   catan-data:
+  caddy-data:
+  caddy-config:

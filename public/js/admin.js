@@ -192,4 +192,13 @@ $('#btn-alogout').addEventListener('click', async () => {
 $('#btn-reload').addEventListener('click', load);
 $('#filter').addEventListener('input', render);
 
+// 用 http:// 打开时，若 HTTPS 已可用则自动切换过去
+if (location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), 5000);
+  fetch(`https://${location.hostname}/health`, { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal })
+    .then(() => location.replace(`https://${location.hostname}${location.pathname}${location.search}`))
+    .catch(() => {});
+}
+
 show(token ? 'main' : 'login');

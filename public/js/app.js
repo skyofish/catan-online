@@ -43,6 +43,16 @@ const hasRes = (have, need) => have && Object.entries(need).every(([k, n]) => (h
 const sum = (r) => (r ? RES_LIST.reduce((s, k) => s + (r[k] || 0), 0) : 0);
 const resText = (r) => RES_LIST.filter((k) => r[k]).map((k) => `${r[k]} ${RES_NAME[k]}`).join('，');
 
+// 从 HTTP 自动跳转到 HTTPS 时，登录状态通过网址片段（#s=…，不会发给服务器）带过来
+(() => {
+  const m = location.hash.match(/^#s=([^&]+)/);
+  if (!m) return;
+  try {
+    localStorage.setItem('catan.session', JSON.stringify(decodeURIComponent(m[1])));
+  } catch {}
+  history.replaceState(null, '', location.pathname + location.search);
+})();
+
 const S = {
   ws: null,
   session: LS.get('catan.session', null),
@@ -1501,6 +1511,20 @@ function initGameUI() {
   $('#board').addEventListener('pointerleave', () => ($('#tile-tip').hidden = true));
 }
 
+// 用 http:// 打开时，若同一地址的 HTTPS 已可用（证书有效），自动切换过去（麦克风需要 HTTPS）
+function upgradeToHttps() {
+  if (location.protocol !== 'http:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), 5000);
+  fetch(`https://${location.hostname}/health`, { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal })
+    .then(() => {
+      const hash = S.session ? '#s=' + encodeURIComponent(S.session) : '';
+      location.replace(`https://${location.hostname}${location.pathname}${location.search}${hash}`);
+    })
+    .catch(() => {});
+}
+
+upgradeToHttps();
 initLogin();
 initVoiceUI();
 initHome();

@@ -101,8 +101,16 @@ function requireAdmin(req) {
 
 // 简单的按 IP 限流
 const hits = new Map();
+const TRUST_PROXY = !!process.env.TRUST_PROXY;
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (xff) return xff;
+  }
+  return req.socket.remoteAddress || '?';
+}
 function rateLimit(req, key, max, windowMs) {
-  const ip = req.socket.remoteAddress || '?';
+  const ip = clientIp(req);
   const k = `${key}:${ip}`;
   const now = Date.now();
   const list = (hits.get(k) || []).filter((t) => now - t < windowMs);

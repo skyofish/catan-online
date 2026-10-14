@@ -1,0 +1,21 @@
+# HTTPS 反向代理：用 Let's Encrypt 的 IP 地址证书（shortlived 配置，6 天有效，Caddy 自动续期）
+# 公网 IP 从环境变量 PUBLIC_IP 读取（写在服务器的 .env 里）
+{
+	# 浏览器用 IP 访问时不会发送 SNI，用它来选择证书
+	default_sni {$PUBLIC_IP}
+}
+
+https://{$PUBLIC_IP} {
+	tls {
+		issuer acme {
+			profile shortlived
+		}
+	}
+	encode gzip
+	reverse_proxy catan:3000
+}
+
+# HTTP 保持可用（证书申请失败时游戏照常运行）；网页确认 HTTPS 可用后会自动跳转过去
+http://{$PUBLIC_IP} {
+	reverse_proxy catan:3000
+}

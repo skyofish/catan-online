@@ -56,10 +56,24 @@ docker run -d --name catan -p 3000:3000 --restart unless-stopped catan-online
 > 国内服务器拉取 `node:22-alpine` 较慢时，可在 `/etc/docker/daemon.json` 配置镜像加速，
 > 或把 Dockerfile 第一行改成可用的镜像源地址（例如公司内部仓库中的 node:22-alpine）。
 
-### 使用域名 / HTTPS
+### HTTPS（麦克风需要）
 
-游戏通过 `/ws` 路径使用 WebSocket。用 Nginx 反向代理时必须转发 `Upgrade` 头，
-可直接参考仓库里的 `nginx.conf.example`。页面在 https 下会自动改用 `wss://`。
+仓库自带 Caddy 配置，可直接用 **Let's Encrypt 的 IP 地址证书**（6 天有效，Caddy 自动续期），不需要域名。
+在服务器的 `.env` 中加入：
+
+```bash
+COMPOSE_PROFILES=https
+PUBLIC_IP=你的服务器公网IP
+CATAN_BIND=127.0.0.1
+CATAN_PORT=3000
+TRUST_PROXY=1
+```
+
+然后 `./deploy.sh`。防火墙需放行 TCP 80 和 443。`http://` 仍可访问；
+网页检测到 HTTPS 可用后会自动跳转过去，并保留登录状态。
+查看证书申请情况：`docker compose logs caddy | grep -iE "obtained|error"`。
+
+若改用自己的 Nginx，参考 `nginx.conf.example`（必须转发 WebSocket 的 `Upgrade` 头）。
 
 ### 不用 Docker
 
@@ -113,6 +127,7 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
 | `ADMIN_PASSWORD` | 无 | 管理员密码 |
 | `AGORA_APP_ID` | 无 | 声网 App ID，设置后语音走声网 |
 | `AGORA_APP_CERTIFICATE` | 无 | 声网 App 证书，用于签发 Token |
+| `TRUST_PROXY` | 无 | 设为 `1` 时按 `X-Forwarded-For` 识别真实 IP（经反向代理时开启） |
 | `DB_PATH` | `data/catan.db` | 数据库文件位置（Docker 中为 `/app/data/catan.db`） |
 
 健康检查：`GET /health`
