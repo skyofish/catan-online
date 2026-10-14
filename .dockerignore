@@ -1,0 +1,7 @@
+node_modules
+test
+.git
+*.log
+README.md
+docker-compose.yml
+nginx.conf.example

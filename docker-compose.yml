@@ -1,0 +1,21 @@
+services:
+  catan:
+    build: .
+    image: catan-online:latest
+    container_name: catan-online
+    restart: unless-stopped
+    ports:
+      - "${CATAN_PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      # 电脑玩家每步操作间隔（毫秒）
+      - BOT_DELAY_MS=900
+      # 玩家掉线多久后由电脑代管（毫秒）
+      - AFK_TAKEOVER_MS=60000
+      # 最多同时存在的房间数
+      - MAX_ROOMS=200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

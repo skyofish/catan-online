@@ -1,0 +1,36 @@
+# 反向代理示例：把 catan.example.com 指向容器的 3000 端口，并支持 WebSocket。
+# 放到 /etc/nginx/conf.d/catan.conf，按需修改域名与证书路径。
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name catan.example.com;
+    # 申请证书后建议改为 301 跳转到 https
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 3600s;   # 长连接不要被提前断开
+    }
+}
+
+# server {
+#     listen 443 ssl http2;
+#     server_name catan.example.com;
+#     ssl_certificate     /etc/letsencrypt/live/catan.example.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/catan.example.com/privkey.pem;
+#     location / {
+#         proxy_pass http://127.0.0.1:3000;
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection $connection_upgrade;
+#         proxy_set_header Host $host;
+#         proxy_read_timeout 3600s;
+#     }
+# }
