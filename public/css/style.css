@@ -753,3 +753,21 @@ body.admin-page { overflow: auto; background-color: var(--sea-deep); background-
 @media (max-width: 860px) {
   #invite-root { top: 86px; left: 16px; right: 16px; width: auto; }
 }
+
+/* ============ 大厅地图预览 ============ */
+.map-preview { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+.map-preview .btn { padding: 5px 14px; }
+.preview-wrap { position: relative; flex: 1; min-height: 280px; border-radius: 10px; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, var(--sea-light) 0%, var(--sea) 50%, var(--sea-deep) 100%); }
+.board-svg.preview { position: absolute; inset: 0; background: transparent; pointer-events: none; }
+.preview .robber { display: none; }
+@media (max-width: 860px) {
+  .preview-wrap { min-height: 320px; }
+}
+
+/* ============ AI 玩家 ============ */
+.tag.ai { background: rgba(127, 160, 255, 0.22); color: #b9c8ff; }
+.tag.thinking { background: rgba(127, 160, 255, 0.3); color: #dfe6ff; animation: think 1s ease-in-out infinite alternate; }
+@keyframes think { to { opacity: 0.45; } }
+.btn.ai-btn { border-color: rgba(127, 160, 255, 0.6); }
+.ai-stats { margin: -6px 0 0; font-size: 13px; }
+.lobby-actions { flex-wrap: wrap; }

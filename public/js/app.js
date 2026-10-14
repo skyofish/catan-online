@@ -450,9 +450,11 @@ async function applyRoom(d) {
     S.game = null;
     S.gameId = null;
     S.overShown = false;
+    if (d.lobbyBoard) S.lobbyBoard = d.lobbyBoard;
     if (prevRoom && prevRoom.players.length < d.room.players.length) sound.play('join');
     showScreen('lobby');
     renderLobby();
+    renderLobbyBoard(!!d.lobbyBoard);
     startOnlinePolling();
     return;
   }
@@ -494,6 +496,18 @@ async function applyRoom(d) {
   else for (const e of events) if (e.type === 'win') setTimeout(showGameOver, 300);
 }
 
+let previewView = null;
+function renderLobbyBoard(changed) {
+  if (!S.lobbyBoard) return;
+  const svg = $('#lobby-board');
+  if (!previewView) previewView = new BoardView(svg, { vertex() {}, edge() {}, tile() {} });
+  if (changed || previewView.board !== S.lobbyBoard) {
+    previewView.setBoard(S.lobbyBoard, true);
+    if (changed) for (let i = 0; i < Math.min(S.lobbyBoard.tiles.length, 19); i++) setTimeout(() => sound.play('tile'), i * 40);
+  }
+  previewView.fit();
+}
+
 function renderLobby() {
   const r = S.room;
   const isHost = r.host === S.you;
@@ -524,7 +538,7 @@ function renderLobby() {
     S.seenSlots.add(p.id);
     slots.push(`<li class="slot ${p.id === S.you ? 'me' : ''} ${p.connected ? '' : 'off'} ${isNew ? 'new' : ''}" data-pid="${p.id}">
       <span class="chip" style="--pc:${p.color}"></span>
-      <span class="pn">${esc(p.name)}${p.id === r.host ? '<em class="tag host">房主</em>' : ''}${p.id === S.you ? '<em class="tag">你</em>' : ''}${p.connected ? '' : '<em class="tag off">离线</em>'}<span class="vmic" title="麦克风已打开"></span></span>
+      <span class="pn">${esc(p.name)}${p.id === r.host ? '<em class="tag host">房主</em>' : ''}${p.id === S.you ? '<em class="tag">你</em>' : ''}${p.ai ? '<em class="tag ai">AI</em>' : p.isBot ? '<em class="tag">电脑</em>' : ''}${p.connected ? '' : '<em class="tag off">离线</em>'}<span class="vmic" title="麦克风已打开"></span></span>
       ${isHost && p.id !== r.host ? `<button class="mini ghost" data-kick="${p.id}" aria-label="移出 ${esc(p.name)}">移出</button>` : ''}
     </li>`);
   }
@@ -540,8 +554,11 @@ function renderLobby() {
     : '<span class="muted">观战中</span>';
   $$('[data-color]').forEach((b) => b.addEventListener('click', () => send('color', { color: b.dataset.color })));
 
+  $('#btn-reroll').hidden = !isHost;
   $('#btn-addbot').hidden = !isHost;
   $('#btn-addbot').disabled = r.players.length >= r.max;
+  $('#btn-addai').hidden = !isHost || !r.aiAvailable;
+  $('#btn-addai').disabled = r.players.length >= r.max;
   $('#btn-start').hidden = !isHost;
   $('#btn-start').disabled = r.players.length < 2;
   $('#lobby-wait').hidden = isHost;
@@ -562,13 +579,22 @@ function initLobby() {
   });
   $('#btn-addbot').addEventListener('click', () => {
     sound.play('click');
-    send('addBot');
+    send('addBot', {});
+  });
+  $('#btn-addai').addEventListener('click', () => {
+    sound.play('click');
+    send('addBot', { ai: true });
   });
   $('#btn-start').addEventListener('click', () => {
     sound.unlock();
     send('start');
   });
   $('#btn-leave-lobby').addEventListener('click', () => send('leave'));
+  $('#btn-reroll').addEventListener('click', () => {
+    sound.unlock();
+    sound.play('dice');
+    send('rerollMap');
+  });
   $('#lobby-vp').addEventListener('change', (e) => send('settings', { targetVP: Number(e.target.value) }));
   $('#lobby-special').addEventListener('change', (e) => send('settings', { specialBuild: e.target.checked }));
 }
@@ -700,7 +726,7 @@ function renderPlayers() {
         <div class="pl-top">
           <span class="chip"></span>
           <span class="pl-name">${esc(p.name)}</span><span class="vmic" title="麦克风已打开"></span>
-          ${room.isBot ? '<em class="tag">电脑</em>' : ''}${room.autoBot ? '<em class="tag off">代管</em>' : ''}${room.connected === false && !room.autoBot ? '<em class="tag off">离线</em>' : ''}
+          ${room.ai ? '<em class="tag ai">AI</em>' : room.isBot ? '<em class="tag">电脑</em>' : ''}${S.room.thinking === p.id ? '<em class="tag thinking">思考中</em>' : ''}${room.autoBot ? '<em class="tag off">代管</em>' : ''}${room.connected === false && !room.autoBot ? '<em class="tag off">离线</em>' : ''}
           <span class="vp" title="胜利点">${p.vp}<small>分</small></span>
         </div>
         <div class="pl-stats">

@@ -37,7 +37,8 @@ class Game {
     this.layout = LAYOUTS[this.size];
     this.targetVP = opts.targetVP || 10;
     this.specialBuild = !!opts.specialBuild;
-    this.board = generateBoard(this.size, rng);
+    // 可传入大厅里预览过的地图；否则现场生成
+    this.board = opts.board && opts.board.size === this.size ? opts.board : generateBoard(this.size, rng);
     this.buildings = {}; // vertexId -> { owner, type }
     this.roads = {}; // edgeId -> owner
     this.robber = this.board.tiles.find((t) => t.terrain === 'desert').id;

@@ -10,6 +10,7 @@ const { attachWS } = require('./ws');
 const { Game } = require('./game');
 const { LAYOUTS, generateBoard } = require('./board');
 const { botAction } = require('./bot');
+const ai = require('./ai');
 const db = require('./db');
 const { RtcTokenBuilder, Role: AgoraRole } = require('./vendor/agora/src/RtcTokenBuilder2');
 
@@ -32,9 +33,11 @@ const AGORA_APP_CERTIFICATE = (process.env.AGORA_APP_CERTIFICATE || '').trim();
 const STUN_URLS = (process.env.STUN_URLS || 'stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302').split(',').map((x) => x.trim()).filter(Boolean);
 
 const COLORS = ['#e53935', '#1e88e5', '#fb8c00', '#f5f5f5', '#43a047', '#8e24aa', '#6d4c41', '#00acc1'];
+const AI_NAMES = ['小智', '小谱', '青言', '清影', '星火', '墨白', '知远', '若谷'];
 const BOT_NAMES = ['阿尔法', '贝塔', '伽马', '德尔塔', '艾普西隆', '泽塔', '伊塔', '西塔', '卡帕', '拉姆达'];
 
 db.open(DB_PATH);
+console.log(ai.enabled() ? `AI 玩家：智谱 ${ai.CFG.model}${ai.CFG.thinking ? '（深度思考）' : ''}` : 'AI 玩家：未配置（只有内置电脑）');
 console.log(AGORA_APP_ID ? `语音：声网 Agora${AGORA_APP_CERTIFICATE ? '（Token 鉴权）' : '（仅 App ID，测试模式）'}` : '语音：内置 WebRTC 点对点');
 if (!ADMIN_USERNAME || !ADMIN_PASSWORD) console.warn('⚠️  未设置 ADMIN_USERNAME / ADMIN_PASSWORD，管理员后台无法登录。');
 
@@ -168,7 +171,7 @@ const api = {
   },
   'GET /api/admin/users': async (req) => {
     requireAdmin(req);
-    return { users: db.listUsers().map((u) => ({ ...u, enabled: !!u.enabled, online: userConns.has(u.id) })) };
+    return { users: db.listUsers().map((u) => ({ ...u, enabled: !!u.enabled, online: userConns.has(u.id) })), ai: ai.publicStats() };
   },
   'POST /api/admin/users': async (req) => {
     requireAdmin(req);
@@ -434,8 +437,10 @@ function roomToJSON(room) {
     gameId: room.gameId,
     recorded: !!room.recorded,
     lastActive: room.lastActive,
-    players: room.players.map((p) => ({ id: p.id, userId: p.userId, name: p.name, color: p.color, isBot: p.isBot, autoBot: p.autoBot })),
+    players: room.players.map((p) => ({ id: p.id, userId: p.userId, name: p.name, color: p.color, isBot: p.isBot, ai: !!p.ai, autoBot: p.autoBot })),
     game: room.game ? room.game.toJSON() : null,
+    board: room.game ? null : room.board,
+    boardId: room.game ? null : room.boardId,
   };
 }
 
@@ -465,6 +470,8 @@ function roomFromJSON(d) {
     }),
     spectators: new Set(),
     game: d.game ? Game.fromJSON(d.game) : null,
+    board: d.board || null,
+    boardId: d.boardId || null,
     botTimer: null,
   };
 }
@@ -483,6 +490,12 @@ function flushRooms() {
 }
 setInterval(flushRooms, 1500).unref();
 
+// 大厅预览用的地图：开局时直接使用
+function newLobbyBoard(room) {
+  room.board = generateBoard(room.size);
+  room.boardId = rid(4);
+}
+
 function removeRoom(room) {
   clearTimeout(room.botTimer);
   for (const c of room.voice || []) c.voiceRoom = null;
@@ -496,6 +509,7 @@ function restoreRooms() {
   for (const d of db.loadRooms()) {
     try {
       const room = roomFromJSON(d);
+      if (!room.game && !room.board) newLobbyBoard(room);
       rooms.set(room.code, room);
       n++;
     } catch (e) {
@@ -554,15 +568,22 @@ function roomInfo(room) {
       name: p.name,
       color: p.color,
       isBot: p.isBot,
+      ai: !!p.ai,
       autoBot: p.autoBot,
       connected: p.isBot || p.conns.size > 0,
     })),
+    thinking: room.aiThinking || null,
+    aiAvailable: ai.enabled(),
     spectators: room.spectators.size,
   };
 }
 
 function sendRoom(room, conn, pid, events, forceFull) {
   const payload = { room: roomInfo(room), you: pid };
+  if (!room.game && room.board && conn.lobbyBoardFor !== room.boardId) {
+    payload.lobbyBoard = room.board;
+    conn.lobbyBoardFor = room.boardId;
+  }
   if (room.game) {
     const full = forceFull || conn.boardFor !== room.gameId;
     conn.boardFor = room.gameId;
@@ -603,29 +624,81 @@ function sendAll(room, msg) {
 const controlledByBot = (p) => p.isBot || p.autoBot;
 
 function scheduleBots(room, delay = BOT_DELAY) {
-  if (!room.game || room.game.phase === 'ended' || room.botTimer) return;
+  if (!room.game || room.game.phase === 'ended' || room.botTimer || room.aiBusy) return;
   const g = room.game;
   const anyBot = room.players.some((p) => controlledByBot(p) && botAction(g, p.id));
   if (!anyBot) return;
   room.botTimer = setTimeout(() => {
     room.botTimer = null;
-    if (!room.game || room.game !== g || g.phase === 'ended' || !rooms.has(room.code)) return;
-    for (const p of room.players) {
-      if (!controlledByBot(p)) continue;
-      const a = botAction(g, p.id);
-      if (!a) continue;
-      const r = g.act(p.id, a);
-      if (!r.ok) {
-        console.warn('[bot] 动作失败', a, r.error);
-        const fallback = g.sub === 'special' ? 'endSpecial' : 'endTurn';
-        const r2 = g.act(p.id, { type: fallback });
-        broadcast(room, r2.events);
-      } else broadcast(room, r.events);
-      const slow = r.events && r.events.some((e) => e.type === 'roll' || e.type === 'robber' || e.type === 'turn');
-      scheduleBots(room, slow ? BOT_DELAY * 1.6 : BOT_DELAY);
-      return;
-    }
+    runBot(room, g).catch((e) => {
+      room.aiBusy = false;
+      console.error('[bot]', e);
+    });
   }, delay);
+}
+
+// 房间与这局游戏仍然存在（游戏可能已经结束，结束时仍要广播结果）
+const alive = (room, g) => room.game === g && rooms.has(room.code);
+
+// 内置策略走一步；失败时兜底结束回合，避免卡死
+function heuristicStep(room, g, p) {
+  const a = botAction(g, p.id);
+  if (!a) return null;
+  let r = g.act(p.id, a);
+  if (!r.ok) {
+    console.warn('[bot] 动作失败', a, r.error);
+    r = g.act(p.id, { type: g.sub === 'special' ? 'endSpecial' : 'endTurn' });
+  }
+  return r;
+}
+
+// 智谱 AI 走一步：模型给出的动作不合法时依次尝试计划中的下一个，最后回退到内置策略
+async function aiStep(room, g, p) {
+  room.aiMem = room.aiMem || new Map();
+  const mem = room.aiMem.get(p.id) || {};
+  room.aiMem.set(p.id, mem);
+  let r = null;
+  room.aiBusy = true;
+  try {
+    for (let i = 0; i < 12; i++) {
+      let a = null;
+      try {
+        a = await ai.decide(g, p.id, mem, () => {
+          if (room.aiThinking !== p.id) {
+            room.aiThinking = p.id;
+            broadcast(room);
+          }
+        });
+      } catch (e) {
+        a = null;
+      }
+      if (!alive(room, g) || g.phase === 'ended') return null;
+      if (!a) break;
+      r = g.act(p.id, a);
+      if (r.ok) break;
+      if (!(g.sub === 'main' && mem.queue && mem.queue.length)) break;
+    }
+  } finally {
+    room.aiBusy = false;
+    room.aiThinking = null;
+  }
+  if (!alive(room, g)) return null;
+  if ((!r || !r.ok) && g.phase !== 'ended') r = heuristicStep(room, g, p);
+  return r;
+}
+
+async function runBot(room, g) {
+  if (!alive(room, g) || g.phase === 'ended') return;
+  for (const p of room.players) {
+    if (!controlledByBot(p) || !botAction(g, p.id)) continue;
+    const r = p.ai && !p.autoBot && ai.enabled() ? await aiStep(room, g, p) : heuristicStep(room, g, p);
+    if (!alive(room, g)) return;
+    if (r) broadcast(room, r.events);
+    else broadcast(room);
+    const slow = r && r.events && r.events.some((e) => e.type === 'roll' || e.type === 'robber' || e.type === 'turn');
+    scheduleBots(room, slow ? BOT_DELAY * 1.6 : BOT_DELAY);
+    return;
+  }
 }
 
 function checkAfk(room) {
@@ -816,6 +889,7 @@ const handlers = {
       lastActive: Date.now(),
       botTimer: null,
     };
+    newLobbyBoard(room);
     rooms.set(code, room);
     handlers.join(conn, { code });
   },
@@ -858,6 +932,7 @@ const handlers = {
     }
     conn.send({ t: 'chatHistory', d: room.chat });
     conn.boardFor = null;
+    conn.lobbyBoardFor = null;
     broadcast(room);
     voiceAdd(room, conn);
     scheduleBots(room);
@@ -876,7 +951,10 @@ const handlers = {
     if (d.size !== undefined && [4, 6, 8].includes(Number(d.size))) {
       const size = Number(d.size);
       if (room.players.length > LAYOUTS[size].maxPlayers) throw new Error(`当前人数超过 ${size} 人地图上限`);
-      room.size = size;
+      if (size !== room.size) {
+        room.size = size;
+        newLobbyBoard(room);
+      }
     }
     if (d.targetVP !== undefined) room.targetVP = Math.max(5, Math.min(20, Number(d.targetVP) || 10));
     if (d.specialBuild !== undefined) room.specialBuild = !!d.specialBuild;
@@ -884,14 +962,25 @@ const handlers = {
     broadcast(room);
   },
 
-  addBot(conn) {
+  rerollMap(conn) {
+    const { room } = ctx(conn, true);
+    if (room.game && room.game.phase !== 'ended') throw new Error('对局已开始');
+    newLobbyBoard(room);
+    broadcast(room);
+  },
+
+  addBot(conn, d) {
     const { room } = ctx(conn, true);
     if (room.game) throw new Error('游戏已开始');
     if (room.players.length >= LAYOUTS[room.size].maxPlayers) throw new Error('房间已满');
+    const wantAi = !!d.ai;
+    if (wantAi && !ai.enabled()) throw new Error('服务器还没有配置智谱 API Key');
     const used = new Set(room.players.map((x) => x.color));
     const usedNames = new Set(room.players.map((x) => x.name));
-    const name = '🤖 ' + (BOT_NAMES.find((n) => !usedNames.has('🤖 ' + n)) || 'Bot');
-    room.players.push({ id: rid(6), userId: null, name, color: COLORS.find((c) => !used.has(c)), isBot: true, autoBot: false, conns: new Set() });
+    const prefix = wantAi ? '🧠 ' : '🤖 ';
+    const pool = wantAi ? AI_NAMES : BOT_NAMES;
+    const name = prefix + (pool.find((n) => !usedNames.has(prefix + n)) || (wantAi ? 'AI' : 'Bot'));
+    room.players.push({ id: rid(6), userId: null, name, color: COLORS.find((c) => !used.has(c)), isBot: true, ai: wantAi, autoBot: false, conns: new Set() });
     broadcast(room);
   },
 
@@ -924,7 +1013,10 @@ const handlers = {
     if (room.game && room.game.phase !== 'ended') throw new Error('游戏已在进行中');
     const L = LAYOUTS[room.size];
     if (room.players.length < L.minPlayers) throw new Error(`至少需要 ${L.minPlayers} 名玩家（可添加电脑玩家）`);
-    room.game = new Game({ size: room.size, targetVP: room.targetVP, specialBuild: room.specialBuild }, room.players.map((p) => ({ id: p.id, name: p.name, color: p.color })));
+    if (!room.board || room.board.size !== room.size) newLobbyBoard(room);
+    room.game = new Game({ size: room.size, targetVP: room.targetVP, specialBuild: room.specialBuild, board: room.board }, room.players.map((p) => ({ id: p.id, name: p.name, color: p.color })));
+    room.board = null;
+    room.boardId = null;
     room.gameId = rid(6);
     room.recorded = false;
     room.players.sort((a, b) => room.game.pIdx(a.id) - room.game.pIdx(b.id));
@@ -941,6 +1033,7 @@ const handlers = {
     room.game = null;
     room.gameId = null;
     room.recorded = false;
+    newLobbyBoard(room);
     room.players = room.players.filter((p) => (p.isBot ? !p.userId : true));
     for (const p of room.players) p.autoBot = false;
     for (const c of [...room.spectators]) {

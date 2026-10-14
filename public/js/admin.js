@@ -61,11 +61,25 @@ const fmt = (t) => {
 
 async function load() {
   try {
-    ({ users } = await api('/api/admin/users'));
+    let aiStats;
+    ({ users, ai: aiStats } = await api('/api/admin/users'));
+    renderAi(aiStats);
     render();
   } catch (e) {
     if (token) toast(e.message, 'error');
   }
+}
+
+function renderAi(a) {
+  const el = $('#ai-stats');
+  if (!el || !a) return;
+  if (!a.enabled) {
+    el.textContent = 'AI 玩家：未配置智谱 API Key';
+    return;
+  }
+  const total = a.promptTokens + a.completionTokens;
+  const err = a.lastError ? `，最近一次错误：${a.lastError}（${fmt(a.lastErrorAt)}）` : '';
+  el.textContent = `AI 玩家：${a.model}${a.thinking ? '（深度思考）' : ''}，本次启动以来调用 ${a.calls} 次，失败 ${a.errors} 次，消耗 ${total.toLocaleString()} tokens（缓存命中 ${a.cachedTokens.toLocaleString()}）${err}`;
 }
 
 function render() {

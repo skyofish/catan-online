@@ -123,8 +123,13 @@
         <div class="block-head"><h2>玩家</h2><span id="lobby-count" class="muted"></span></div>
         <ul id="lobby-players" class="slots"></ul>
         <div class="colors-row"><span class="muted">你的颜色</span><div id="lobby-colors" class="swatches"></div></div>
+        <div class="map-preview">
+          <div class="block-head"><h2>本局地图</h2><button class="btn" id="btn-reroll">换一张</button></div>
+          <div class="preview-wrap"><svg id="lobby-board" class="board-svg preview" role="img" aria-label="本局地图预览"></svg></div>
+        </div>
         <div class="lobby-actions">
-          <button class="btn" id="btn-addbot">添加电脑玩家</button>
+          <button class="btn" id="btn-addbot" title="程序内置的电脑玩家，反应快">+ 内置电脑</button>
+          <button class="btn ai-btn" id="btn-addai" title="由智谱大模型做关键决策，更会思考，每步会稍慢" hidden>+ AI 玩家</button>
           <button class="btn primary" id="btn-start">开始游戏</button>
           <p id="lobby-wait" class="muted"></p>
         </div>

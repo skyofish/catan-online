@@ -216,4 +216,4 @@ function mainAction(g, p, special) {
   return special ? { type: 'endSpecial' } : { type: 'endTurn' };
 }
 
-module.exports = { botAction };
+module.exports = { botAction, vertexScore, roadScore, pickBest, need, mainAction };

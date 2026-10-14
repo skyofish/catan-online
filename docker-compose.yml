@@ -15,6 +15,10 @@ services:
       # 声网语音：在声网控制台创建项目后获得，同样写在 .env 里
       - AGORA_APP_ID=${AGORA_APP_ID:-}
       - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE:-}
+      # 智谱 AI 玩家：API Key 写在 .env 里；模型默认免费的 glm-4.7-flash
+      - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
+      - ZHIPU_MODEL=${ZHIPU_MODEL:-glm-4.7-flash}
+      - ZHIPU_THINKING=${ZHIPU_THINKING:-}
       # 经 Caddy 反向代理时，用 X-Forwarded-For 识别真实 IP（用于登录限流）
       - TRUST_PROXY=${TRUST_PROXY:-}
       # 电脑玩家每步操作间隔（毫秒）
