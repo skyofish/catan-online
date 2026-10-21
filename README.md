@@ -1,4 +1,25 @@
-# 卡坦岛 在线版
+# 朋友游戏厅
+
+一个部署在自己服务器上的私人游戏平台：统一账号登录，在首页的「游戏柜」里选择游戏。
+目前收录的游戏是**卡坦岛**（`/catan/`）。
+
+## 平台
+
+- 首页 `/`：登录（账号由管理员开通，无需密码）后进入游戏大厅，显示在线人数、各游戏进行中的房间和你的战绩；
+  在大厅里也能收到朋友的游戏邀请。
+- 管理员后台 `/admin`：管理整个平台的账号。
+- 平台名称可在 `.env` 中设置：`PLATFORM_NAME=你喜欢的名字`。
+- 旧的卡坦岛邀请链接（`/?room=XXXXX`）会自动跳转到 `/catan/`。
+
+### 添加新游戏
+
+1. 服务器：在 `server/games/<id>/index.js` 导出 `createGame(platform)`，返回
+   `{ id, handlers, routes, onConnect, onClose, kickUser, summary, shutdown, rateKey }`（可参考卡坦岛模块）。
+2. 在 `server/index.js` 的 `GAMES` 与 `CATALOG` 中登记，并在 `WS_ROUTES` 加上 `/<id>/ws`。
+3. 前端：页面放在 `public/<id>/`，用 `/js/session.js` 获取登录状态，未登录时调用 `goToLogin()`。
+4. 战绩写入 `matches` 表时带上 `game: '<id>'`。
+
+## 卡坦岛
 
 网页端卡坦岛，支持 4 / 6 / 8 人地图、好友联机、电脑玩家、动画与合成音效，
 以及账号登录、战绩排行榜和管理员后台。
@@ -137,6 +158,7 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `PORT` | `3000` | 监听端口 |
+| `PLATFORM_NAME` | `朋友游戏厅` | 平台名称 |
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `BOT_DELAY_MS` | `900` | 电脑玩家每步的间隔（毫秒），掷骰后自动加长以便看清动画 |
 | `AFK_TAKEOVER_MS` | `60000` | 真人掉线多久后由电脑临时代管，重新连上后自动交还 |
@@ -182,27 +204,31 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
 
 ```
 server/
-  index.js   HTTP 静态服务 + 登录 / 管理员 API + 房间管理 + 对局持久化
-  db.js      SQLite 数据层（账号、会话、房间快照、战绩）
-  vendor/agora/  声网官方 Token 生成代码（MIT，仅依赖 Node 内置模块）
+  index.js   平台：HTTP、登录 / 管理员 API、在线状态、WebSocket 鉴权与路由
+  db.js      SQLite 数据层（账号、会话、房间快照、各游戏战绩）
   ws.js      零依赖 WebSocket 服务端实现（RFC 6455）
-  game.js    规则引擎（服务器权威，按玩家隐藏手牌）
-  board.js   4/6/8 人地图生成
-  bot.js     内置电脑玩家（也为 AI 提供候选评分）
-  ai.js      智谱 AI 玩家（提示词、候选生成、回退）
+  games/catan/
+    index.js   卡坦岛模块：房间、对局持久化、语音、邀请、电脑与 AI 玩家调度
+    game.js    规则引擎（服务器权威，按玩家隐藏手牌）
+    board.js   4/6/8 人地图生成
+    bot.js     内置电脑玩家（也为 AI 提供候选评分）
+    ai.js      智谱 AI 玩家（提示词、候选生成、回退）
+    vendor/agora/  声网官方 Token 生成代码（MIT，仅依赖 Node 内置模块）
 public/
-  index.html  页面与 SVG 图标
-  admin.html  管理员后台
-  js/admin.js   后台逻辑
-  js/voice.js   房间语音（声网 / WebRTC 点对点）
-  css/style.css
-  js/app.js     界面、网络、事件动画编排
-  js/board.js   SVG 棋盘渲染与平移缩放
-  js/fx.js      飞牌、骰子、粒子、横幅、彩带
-  js/audio.js   合成音效与背景音乐
+  index.html, css/hub.css, js/hub.js   平台首页（登录与游戏柜）
+  js/session.js   平台共享：登录状态、接口请求、HTTPS 跳转
+  admin.html, js/admin.js   管理员后台
+  catan/
+    index.html    卡坦岛页面与 SVG 图标
+    css/style.css
+    js/app.js     界面、网络、事件动画编排
+    js/board.js   SVG 棋盘渲染与平移缩放
+    js/fx.js      飞牌、骰子、粒子、横幅、彩带
+    js/audio.js   合成音效与背景音乐
+    js/voice.js   房间语音（声网 / WebRTC 点对点）
 test/
   sim.js     36 局电脑对局，校验资源守恒、距离规则、棋子数量
-  socket.js  端到端测试（管理员、登录、禁用踢出、重启续玩、战绩排行）
+  socket.js  端到端测试（平台、管理员、登录、邀请、禁用踢出、重启续玩、战绩排行）
 ```
 
 运行测试：`npm test`

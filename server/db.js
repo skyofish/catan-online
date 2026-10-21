@@ -80,6 +80,16 @@ function migrate() {
       COMMIT;
     `);
   }
+  if (db.prepare('PRAGMA user_version').get().user_version < 2) {
+    // 平台化：战绩区分游戏，已有记录都属于卡坦岛
+    db.exec(`
+      BEGIN;
+      ALTER TABLE matches ADD COLUMN game TEXT NOT NULL DEFAULT 'catan';
+      CREATE INDEX IF NOT EXISTS idx_matches_game ON matches(game);
+      PRAGMA user_version = 2;
+      COMMIT;
+    `);
+  }
 }
 
 function prepare() {
@@ -103,7 +113,7 @@ function prepare() {
     ON CONFLICT(code) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`);
   st.deleteRoom = db.prepare('DELETE FROM rooms WHERE code = ?');
   st.allRooms = db.prepare('SELECT code, data FROM rooms');
-  st.insertMatch = db.prepare('INSERT INTO matches (room_code, size, target_vp, turns, started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?)');
+  st.insertMatch = db.prepare('INSERT INTO matches (game, room_code, size, target_vp, turns, started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
   st.insertMP = db.prepare(`INSERT INTO match_players (match_id, seat, user_id, name, color, is_bot, vp, rank, is_winner, stats)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   st.leaderboard = db.prepare(`
@@ -112,20 +122,20 @@ function prepare() {
     FROM match_players mp
     JOIN users u ON u.id = mp.user_id
     JOIN matches m ON m.id = mp.match_id
-    WHERE u.enabled = 1
+    WHERE u.enabled = 1 AND m.game = ?
     GROUP BY u.id
     ORDER BY wins DESC, CAST(wins AS REAL) / COUNT(*) DESC, games DESC, u.username
     LIMIT ?`);
   st.userStats = db.prepare(`
-    SELECT COUNT(*) AS games, COALESCE(SUM(is_winner), 0) AS wins, ROUND(AVG(vp), 1) AS avg_vp
-    FROM match_players WHERE user_id = ?`);
+    SELECT COUNT(*) AS games, COALESCE(SUM(mp.is_winner), 0) AS wins, ROUND(AVG(mp.vp), 1) AS avg_vp
+    FROM match_players mp JOIN matches m ON m.id = mp.match_id WHERE mp.user_id = ? AND m.game = ?`);
   st.recentMatches = db.prepare(`
     SELECT m.id, m.size, m.target_vp, m.turns, m.started_at, m.ended_at,
            mp.vp, mp.rank, mp.is_winner,
            (SELECT COUNT(*) FROM match_players x WHERE x.match_id = m.id) AS players,
            (SELECT name FROM match_players w WHERE w.match_id = m.id AND w.is_winner = 1) AS winner
     FROM match_players mp JOIN matches m ON m.id = mp.match_id
-    WHERE mp.user_id = ?
+    WHERE mp.user_id = ? AND m.game = ?
     ORDER BY m.ended_at DESC LIMIT ?`);
 }
 
@@ -223,7 +233,7 @@ function loadRooms() {
 function recordMatch(m, players) {
   db.exec('BEGIN');
   try {
-    const r = st.insertMatch.run(m.roomCode, m.size, m.targetVP, m.turns, m.startedAt, m.endedAt);
+    const r = st.insertMatch.run(m.game || 'catan', m.roomCode, m.size, m.targetVP, m.turns, m.startedAt, m.endedAt);
     const id = Number(r.lastInsertRowid);
     for (const p of players) {
       const uid = p.userId && getUser(p.userId) ? p.userId : null;
@@ -237,12 +247,12 @@ function recordMatch(m, players) {
   }
 }
 
-function leaderboard(limit = 50) {
-  return st.leaderboard.all(limit);
+function leaderboard(limit = 50, game = 'catan') {
+  return st.leaderboard.all(game, limit);
 }
 
-function userSummary(userId, limit = 10) {
-  return { stats: st.userStats.get(userId), recent: st.recentMatches.all(userId, limit) };
+function userSummary(userId, limit = 10, game = 'catan') {
+  return { stats: st.userStats.get(userId, game), recent: limit ? st.recentMatches.all(userId, game, limit) : [] };
 }
 
 function close() {

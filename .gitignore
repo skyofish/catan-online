@@ -3,4 +3,4 @@ node_modules
 .DS_Store
 .env
 data/
-public/vendor/
+public/catan/vendor/

@@ -1,0 +1,185 @@
+/* ============ 平台大厅 ============ */
+:root {
+  --felt: #16302a;
+  --felt-2: #1d3d35;
+  --felt-deep: #0f231e;
+  --lid: #efe4cb;
+  --lid-edge: #d8c79f;
+  --ink: #241d14;
+  --brass: #e0a93b;
+  --brass-dark: #a8781d;
+  --live: #d4553a;
+  --text: #ebe5d6;
+  --muted: #a9b8ad;
+  --serif: 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', Georgia, serif;
+  --sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: var(--sans);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.6;
+  background-color: var(--felt);
+  /* 台布的细绒纹理 */
+  background-image:
+    radial-gradient(ellipse at 60% 10%, rgba(255, 255, 255, 0.06), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 5px);
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  min-height: 100vh;
+}
+[hidden] { display: none !important; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+
+/* ---------- 招牌 ---------- */
+.sign {
+  position: sticky; top: 0; height: 100vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 22px;
+  padding: 40px 0 28px;
+  background: linear-gradient(180deg, #5a2a1c, #3d1c13);
+  border-right: 4px solid #2a130c;
+  box-shadow: 6px 0 24px rgba(0, 0, 0, 0.35);
+}
+.sign-lamp { width: 14px; height: 14px; border-radius: 50%; background: #ffd27a; box-shadow: 0 0 18px 6px rgba(255, 196, 90, 0.55); }
+.sign-name {
+  margin: 0;
+  writing-mode: vertical-rl;
+  font-family: var(--serif);
+  font-size: clamp(40px, 6.2vh, 64px);
+  letter-spacing: 0.32em;
+  color: #f6dfa0;
+  text-shadow: 0 2px 0 #2a130c, 0 0 18px rgba(246, 205, 120, 0.35);
+}
+.sign-open {
+  margin-top: auto;
+  writing-mode: vertical-rl;
+  font-size: 13px; letter-spacing: 0.4em;
+  color: #ffd27a; border: 1px solid rgba(255, 210, 122, 0.5); border-radius: 4px; padding: 8px 3px;
+}
+
+/* ---------- 主区域 ---------- */
+.room { padding: 56px clamp(20px, 5vw, 72px) 64px; max-width: 1180px; width: 100%; }
+.view { animation: enter 0.45s ease-out; }
+@keyframes enter { from { opacity: 0; transform: translateY(8px); } }
+
+.btn {
+  border: 1px solid rgba(224, 169, 59, 0.55); background: rgba(0, 0, 0, 0.2); color: var(--text);
+  border-radius: 8px; padding: 9px 18px; font-weight: 600; transition: background 0.15s, transform 0.1s;
+}
+.btn:hover:not(:disabled) { background: rgba(224, 169, 59, 0.15); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: linear-gradient(#ecb94c, #c88d24); color: #2a1a06; border-color: #f5d27e; }
+.btn.primary:hover:not(:disabled) { background: linear-gradient(#f4c55d, #d39a2c); }
+.btn.ghost { background: transparent; }
+
+/* ---------- 登录 ---------- */
+.door { max-width: 460px; }
+.door h2 { font-family: var(--serif); font-size: 40px; margin: 0; color: #f6efe0; letter-spacing: 0.04em; }
+.hint { margin: 6px 0 22px; color: var(--muted); }
+.door-row { display: flex; gap: 10px; }
+.door-row input {
+  flex: 1; min-width: 0; font-size: 18px; padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(224, 169, 59, 0.45); border-radius: 8px;
+}
+.door-row input::placeholder { color: rgba(235, 229, 214, 0.4); }
+.door-row .btn { padding: 12px 26px; font-size: 17px; }
+.form-error { margin: 10px 0 0; color: #ffb4a6; }
+.shelf-caption { margin: 64px 0 14px; color: var(--muted); font-size: 14px; }
+
+/* ---------- 已登录 ---------- */
+.hall-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 34px; }
+.greet { margin: 0; font-family: var(--serif); font-size: clamp(28px, 4vw, 40px); color: #f6efe0; line-height: 1.25; }
+.online { margin: 6px 0 0; color: var(--muted); }
+.online .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #6fcf6a; box-shadow: 0 0 8px #6fcf6a; margin-right: 6px; vertical-align: 1px; }
+
+/* ---------- 游戏柜 ---------- */
+.shelf {
+  list-style: none; margin: 0; padding: 0 0 26px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px 26px;
+  position: relative;
+}
+/* 木质隔板 */
+.shelf::after {
+  content: ''; position: absolute; left: -12px; right: -12px; bottom: 0; height: 14px; border-radius: 3px;
+  background: linear-gradient(#7a4f2b, #5b381c); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.45), inset 0 2px 0 rgba(255, 255, 255, 0.15);
+}
+.box {
+  position: relative; display: flex; flex-direction: column;
+  background: var(--lid); color: var(--ink); border-radius: 6px;
+  box-shadow: 0 1px 0 var(--lid-edge), 0 6px 0 #b9a77b, 0 14px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: onto-shelf 0.55s cubic-bezier(.2, 1.1, .3, 1) both;
+}
+.box:nth-child(2) { animation-delay: 0.08s; }
+.box:nth-child(3) { animation-delay: 0.16s; }
+@keyframes onto-shelf { from { transform: translateY(-24px); opacity: 0; } }
+.box.playable:hover { transform: translateY(-6px); box-shadow: 0 1px 0 var(--lid-edge), 0 6px 0 #b9a77b, 0 24px 32px rgba(0, 0, 0, 0.5); }
+.box-art { position: relative; aspect-ratio: 16 / 10; border-radius: 6px 6px 0 0; overflow: hidden; background: radial-gradient(ellipse at 50% 55%, #2a7d8c, #0d4a57 55%, #06303a); }
+.box-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.box-title {
+  position: absolute; left: 14px; bottom: 10px; margin: 0;
+  font-family: var(--serif); font-size: 34px; color: #f8ecc9; letter-spacing: 0.06em;
+  text-shadow: 0 2px 0 #3a2810, 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+.live-badge {
+  position: absolute; top: 10px; right: 10px; font-size: 12px; font-weight: 700;
+  background: var(--live); color: #fff; border-radius: 4px; padding: 2px 8px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.box-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.tagline { margin: 0; font-size: 15px; }
+.meta { margin: 0; font-size: 13px; color: #6d5d40; }
+.status { margin: 0; font-size: 13px; color: #3c5b33; font-weight: 600; }
+.mine { margin: 0; font-size: 13px; color: #6d5d40; }
+.box .btn.primary { margin-top: auto; align-self: flex-start; padding: 9px 22px; text-decoration: none; display: inline-block; }
+.box.empty {
+  background: transparent; color: var(--muted); box-shadow: none; border: 2px dashed rgba(169, 184, 173, 0.35);
+  min-height: 240px; display: grid; place-items: center; text-align: center; padding: 20px;
+}
+.box.empty b { display: block; font-family: var(--serif); font-size: 22px; color: var(--text); font-weight: 600; }
+.shelf.preview .box { opacity: 0.85; }
+.shelf.preview .box-body .btn, .shelf.preview .status, .shelf.preview .mine { display: none; }
+
+/* ---------- 邀请与提示 ---------- */
+#invite-root { position: fixed; top: 20px; right: 20px; z-index: 50; display: flex; flex-direction: column; gap: 10px; width: min(340px, calc(100vw - 40px)); }
+.invite-card {
+  position: relative; overflow: hidden; background: #2b1d12; border: 1px solid var(--brass); border-radius: 12px;
+  padding: 12px 14px 14px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55); animation: ic-in 0.4s cubic-bezier(.2, 1.3, .4, 1);
+}
+@keyframes ic-in { from { transform: translateX(60px) scale(0.9); opacity: 0; } }
+.invite-card b { color: #ffe39a; }
+.invite-card small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.ic-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.ic-timer { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--brass); transform-origin: left; animation: ic-timer 60s linear forwards; }
+@keyframes ic-timer { to { transform: scaleX(0); } }
+#toast-root { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+.toast { background: rgba(20, 13, 8, 0.94); border: 1px solid rgba(224, 169, 59, 0.5); padding: 8px 16px; border-radius: 20px; font-size: 14px; }
+
+/* ---------- 手机 ---------- */
+@media (max-width: 760px) {
+  body { grid-template-columns: 1fr; }
+  .sign {
+    position: relative; height: auto; flex-direction: row; justify-content: center; gap: 14px;
+    padding: 18px 16px; border-right: 0; border-bottom: 4px solid #2a130c;
+  }
+  .sign-name { writing-mode: horizontal-tb; font-size: 30px; letter-spacing: 0.2em; }
+  .sign-open { writing-mode: horizontal-tb; margin: 0; padding: 2px 8px; letter-spacing: 0.2em; }
+  .room { padding: 28px 16px 48px; }
+  .door h2 { font-size: 30px; }
+  .door-row { flex-direction: column; }
+  .shelf { grid-template-columns: 1fr; }
+  .hall-top { flex-direction: column; gap: 10px; margin-bottom: 24px; }
+  .greet { font-size: 24px; }
+  .hall-top .btn { padding: 6px 14px; font-size: 14px; }
+  .box.empty { min-height: 110px; }
+  .shelf-caption { margin-top: 40px; }
+  #invite-root { top: 12px; right: 16px; left: 16px; width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

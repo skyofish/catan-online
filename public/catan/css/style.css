@@ -771,3 +771,6 @@ body.admin-page { overflow: auto; background-color: var(--sea-deep); background-
 .btn.ai-btn { border-color: rgba(127, 160, 255, 0.6); }
 .ai-stats { margin: -6px 0 0; font-size: 13px; }
 .lobby-actions { flex-wrap: wrap; }
+
+.hall-link { text-decoration: none; color: var(--ink); white-space: nowrap; }
+.hall-link:hover { border-color: var(--brass); }

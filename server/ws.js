@@ -126,7 +126,8 @@ function attachWS(server, path, onConn) {
   server.on('upgrade', (req, socket) => {
     const url = new URL(req.url, 'http://x');
     const key = req.headers['sec-websocket-key'];
-    if (url.pathname !== path || !key || (req.headers.upgrade || '').toLowerCase() !== 'websocket') {
+    const paths = Array.isArray(path) ? path : [path];
+    if (!paths.includes(url.pathname) || !key || (req.headers.upgrade || '').toLowerCase() !== 'websocket') {
       socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
       return socket.destroy();
     }

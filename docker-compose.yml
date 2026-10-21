@@ -9,6 +9,8 @@ services:
       - "${CATAN_BIND:-0.0.0.0}:${CATAN_PORT:-3000}:3000"
     environment:
       - PORT=3000
+      # 平台名称（显示在首页招牌和网页标题上）
+      - PLATFORM_NAME=${PLATFORM_NAME:-朋友游戏厅}
       # 管理员账号密码：写在服务器的 .env 文件里，不要提交到仓库
       - ADMIN_USERNAME=${ADMIN_USERNAME:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}

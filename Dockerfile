@@ -10,11 +10,11 @@ WORKDIR /app
 
 # 声网语音 Web SDK：构建时下载到本站，玩家从本服务器加载（下载失败时网页会改用公共 CDN）
 ARG AGORA_SDK_VERSION=4.24.2
-RUN mkdir -p /app/public/vendor && \
+RUN mkdir -p /app/public/catan/vendor && \
     (wget -qO- "https://registry.npmjs.org/agora-rtc-sdk-ng/-/agora-rtc-sdk-ng-${AGORA_SDK_VERSION}.tgz" \
-       | tar -xzO package/AgoraRTC_N-production.js > /app/public/vendor/AgoraRTC_N.js \
-     && test -s /app/public/vendor/AgoraRTC_N.js \
-     || (echo "⚠️  声网 SDK 下载失败，将使用公共 CDN" && rm -f /app/public/vendor/AgoraRTC_N.js))
+       | tar -xzO package/AgoraRTC_N-production.js > /app/public/catan/vendor/AgoraRTC_N.js \
+     && test -s /app/public/catan/vendor/AgoraRTC_N.js \
+     || (echo "⚠️  声网 SDK 下载失败，将使用公共 CDN" && rm -f /app/public/catan/vendor/AgoraRTC_N.js))
 
 COPY package.json ./
 COPY server ./server

@@ -2,6 +2,7 @@ import { sound } from './audio.js';
 import { BoardView, RES_LIST, RES_NAME, TERRAIN_NAME } from './board.js';
 import * as fx from './fx.js';
 import { Voice } from './voice.js';
+import { getSession, takeHashSession, api as platformApi, upgradeToHttps, goToLogin, wsUrl } from '/js/session.js';
 
 // ======================= 基础 =======================
 const $ = (s, r = document) => r.querySelector(s);
@@ -43,19 +44,13 @@ const hasRes = (have, need) => have && Object.entries(need).every(([k, n]) => (h
 const sum = (r) => (r ? RES_LIST.reduce((s, k) => s + (r[k] || 0), 0) : 0);
 const resText = (r) => RES_LIST.filter((k) => r[k]).map((k) => `${r[k]} ${RES_NAME[k]}`).join('，');
 
-// 从 HTTP 自动跳转到 HTTPS 时，登录状态通过网址片段（#s=…，不会发给服务器）带过来
-(() => {
-  const m = location.hash.match(/^#s=([^&]+)/);
-  if (!m) return;
-  try {
-    localStorage.setItem('catan.session', JSON.stringify(decodeURIComponent(m[1])));
-  } catch {}
-  history.replaceState(null, '', location.pathname + location.search);
-})();
+// 登录由平台负责；从 HTTP 跳到 HTTPS 时会带上登录状态
+takeHashSession();
+if (!getSession()) goToLogin();
 
 const S = {
   ws: null,
-  session: LS.get('catan.session', null),
+  session: getSession(),
   user: null,
   room: null,
   you: null,
@@ -84,8 +79,7 @@ window.__voice = voice;
 
 // ======================= 网络 =======================
 function connect() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  const ws = new WebSocket(wsUrl('/catan/ws'));
   S.ws = ws;
   ws.onopen = () => {
     S.connected = true;
@@ -121,32 +115,20 @@ function setConn(ok) {
   document.body.classList.toggle('offline', !ok);
 }
 
-async function api(path, { method = 'GET', body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (S.session) headers.Authorization = 'Bearer ' + S.session;
-  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    if (res.status === 401 && path !== '/api/login') signedOut();
-    const e = new Error(data.error || '请求失败，请稍后再试');
-    e.status = res.status;
+async function api(path, opts) {
+  try {
+    return await platformApi(path, opts);
+  } catch (e) {
+    if (e.status === 401) signedOut();
     throw e;
   }
-  return data;
 }
 
+// 登录失效或账号被停用：回到平台登录页，登录后自动回到这里
 function signedOut(reason) {
   voice.leave();
   S.session = null;
-  S.user = null;
-  LS.set('catan.session', null);
-  S.room = null;
-  S.game = null;
-  S.board = null;
-  S.gameId = null;
-  closeModal();
-  showScreen('login');
-  if (reason) showLoginError(reason);
+  goToLogin(reason);
 }
 
 function onMessage(t, d) {
@@ -236,56 +218,12 @@ function onMessage(t, d) {
 
 // ======================= 屏幕切换 =======================
 function showScreen(name) {
-  const login = name === 'login';
-  const target = login ? 'home' : name;
-  for (const s of $$('.screen')) s.hidden = s.id !== `screen-${target}`;
+  for (const s of $$('.screen')) s.hidden = s.id !== `screen-${name}`;
   document.body.dataset.screen = name;
-  $('#login-form').hidden = !login;
-  $('#ledger-main').hidden = login;
-  if (target === 'home') loadDemo();
-  if (login) setTimeout(() => $('#login-name').focus(), 50);
-  if (name === 'home') refreshHomeTab();
-}
-
-// ======================= 登录 =======================
-function showLoginError(msg) {
-  const el = $('#login-error');
-  el.textContent = msg || '';
-  el.hidden = !msg;
-}
-
-function initLogin() {
-  const last = LS.get('catan.lastUser', '');
-  if (last) $('#login-name').value = last;
-  $('#login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    sound.unlock();
-    const username = $('#login-name').value.trim();
-    if (!username) return showLoginError('请输入账号');
-    const btn = $('#btn-login');
-    btn.disabled = true;
-    showLoginError('');
-    try {
-      const r = await api('/api/login', { method: 'POST', body: { username } });
-      S.session = r.token;
-      LS.set('catan.session', r.token);
-      LS.set('catan.lastUser', r.user.username);
-      sound.play('join');
-      send('hello', { session: S.session });
-    } catch (err) {
-      showLoginError(err.message);
-      sound.play('error');
-    } finally {
-      btn.disabled = false;
-    }
-  });
-  $('#btn-logout').addEventListener('click', async () => {
-    try {
-      await api('/api/logout', { method: 'POST' });
-    } catch {}
-    signedOut();
-    send('hello', { session: null });
-  });
+  if (name === 'home') {
+    loadDemo();
+    refreshHomeTab();
+  }
 }
 
 // ======================= 首页 =======================
@@ -295,7 +233,7 @@ async function loadDemo() {
   if (!svg || svg.dataset.loaded) return;
   svg.dataset.loaded = '1';
   try {
-    const res = await fetch('/api/demo?size=' + (S.createSize || 6));
+    const res = await fetch('/api/catan/demo?size=' + (S.createSize || 6));
     const b = await res.json();
     demoView = demoView || new BoardView(svg, { vertex() {}, edge() {}, tile() {} });
     demoView.setBoard(b, true);
@@ -365,7 +303,7 @@ async function loadRank() {
   const box = $('#htab-rank');
   if (!box.innerHTML) box.innerHTML = '<p class="empty">加载中…</p>';
   try {
-    const { rows } = await api('/api/leaderboard');
+    const { rows } = await api('/api/catan/leaderboard');
     if (!rows.length) {
       box.innerHTML = '<p class="empty">还没有完成的对局。打完第一局，这里就会出现排名。</p>';
       return;
@@ -388,7 +326,7 @@ async function loadMine() {
   const box = $('#htab-mine');
   if (!box.innerHTML) box.innerHTML = '<p class="empty">加载中…</p>';
   try {
-    const { stats, recent } = await api('/api/me');
+    const { stats, recent } = await api('/api/catan/me');
     const g = stats.games || 0;
     box.innerHTML = `<dl class="my-stats">
         <div><dt>对局</dt><dd>${g}</dd></div>
@@ -1633,21 +1571,7 @@ function initGameUI() {
   $('#board').addEventListener('pointerleave', () => ($('#tile-tip').hidden = true));
 }
 
-// 用 http:// 打开时，若同一地址的 HTTPS 已可用（证书有效），自动切换过去（麦克风需要 HTTPS）
-function upgradeToHttps() {
-  if (location.protocol !== 'http:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
-  const ctrl = new AbortController();
-  setTimeout(() => ctrl.abort(), 5000);
-  fetch(`https://${location.hostname}/health`, { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal })
-    .then(() => {
-      const hash = S.session ? '#s=' + encodeURIComponent(S.session) : '';
-      location.replace(`https://${location.hostname}${location.pathname}${location.search}${hash}`);
-    })
-    .catch(() => {});
-}
-
 upgradeToHttps();
-initLogin();
 initVoiceUI();
 initHome();
 initLobby();

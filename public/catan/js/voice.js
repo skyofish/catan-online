@@ -16,7 +16,7 @@ const LSset = (k, v) => {
 
 const SPEAK_THRESHOLD = 0.035;
 const AGORA_SDK_VERSION = '4.24.2';
-const AGORA_SDK_URLS = ['/vendor/AgoraRTC_N.js', `https://cdn.jsdelivr.net/npm/agora-rtc-sdk-ng@${AGORA_SDK_VERSION}/AgoraRTC_N-production.js`];
+const AGORA_SDK_URLS = ['/catan/vendor/AgoraRTC_N.js', `https://cdn.jsdelivr.net/npm/agora-rtc-sdk-ng@${AGORA_SDK_VERSION}/AgoraRTC_N-production.js`];
 
 let sdkPromise = null;
 // 先从本站加载声网 SDK（Docker 构建时下载），失败再用公共 CDN

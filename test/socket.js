@@ -43,8 +43,8 @@ async function http(method, url, body, token) {
   return { status: res.status, data: await res.json().catch(() => ({})) };
 }
 
-function client(name) {
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+function client(name, path = '/catan/ws') {
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}${path}`);
   const c = { ws, name, state: null, msgs: [], waiters: [] };
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
@@ -65,8 +65,8 @@ function client(name) {
   return c;
 }
 
-async function loginWS(name, session) {
-  const c = client(name);
+async function loginWS(name, session, path) {
+  const c = client(name, path);
   await c.open;
   c.send('hello', { session });
   await c.wait((m) => m.t === 'hello' || m.t === 'auth');
@@ -105,6 +105,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     anon.ws.close();
     console.log('✓ 玩家登录（无密码）与未登录拦截');
 
+    // ---------- 平台：游戏目录、旧链接 ----------
+    const games = (await http('GET', '/api/games', null, sRed)).data;
+    assert.ok(games.platform && games.games.some((g) => g.id === 'catan' && g.path === '/catan/' && g.live), '平台应列出卡坦岛');
+    assert.strictEqual((await http('GET', '/api/games')).status, 401, '未登录不能看游戏目录');
+    const old = await fetch(BASE + '/?room=ABCDE', { redirect: 'manual' });
+    assert.strictEqual(old.status, 302);
+    assert.strictEqual(old.headers.get('location'), '/catan/?room=ABCDE', '旧邀请链接应跳到卡坦岛');
+    const page = await (await fetch(BASE + '/')).text();
+    assert.ok(!page.includes('{{PLATFORM_NAME}}'), '平台名称应已替换');
+    // 在平台大厅的玩家（小紫）
+    const purpleAdd = await http('POST', '/api/admin/users', { usernames: '小紫' }, adm);
+    assert.deepStrictEqual(purpleAdd.data.created, ['小紫']);
+    const sPurple = (await http('POST', '/api/login', { username: '小紫' })).data.token;
+    const hub = await loginWS('大厅', sPurple, '/hub/ws');
+    assert.ok(hub.msgs.some((m) => m.t === 'hello'), '平台大厅连接应完成登录');
+    console.log('✓ 平台：游戏目录、旧邀请链接跳转、大厅在线');
+
     // ---------- 建房开局 ----------
     const a = await loginWS('A', sRed);
     a.send('create', { size: 4, targetVP: 5 });
@@ -124,7 +141,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await a.wait((m) => m.t === 'error' && /刚刚邀请过/.test(m.d.msg));
     b.send('inviteReply', { fromUser: inv.fromUser, code, accept: false });
     await a.wait((m) => m.t === 'toast' && /小蓝 暂时不能加入/.test(m.d.msg));
-    console.log('✓ 邀请在线玩家：在线列表、发出邀请、防重复、拒绝通知');
+    // 邀请在平台大厅的小紫：大厅也能收到邀请并拒绝
+    a.send('online');
+    const ol2 = (await a.wait((m) => m.t === 'online' && m.d.some((u) => u.username === '小紫'))).d;
+    const purple = ol2.find((u) => u.username === '小紫');
+    assert.strictEqual(purple.status, 'idle');
+    a.send('invite', { userId: purple.id });
+    const inv2 = (await hub.wait((m) => m.t === 'invite')).d;
+    hub.send('inviteReply', { game: 'catan', fromUser: inv2.fromUser, code, accept: false });
+    await a.wait((m) => m.t === 'toast' && /小紫 暂时不能加入/.test(m.d.msg));
+    hub.ws.close();
+    console.log('✓ 邀请在线玩家：在线列表、发出邀请、防重复、拒绝通知（含平台大厅）');
 
     b.send('join', { code: inv.code });
     g.send('join', { code });
@@ -184,12 +211,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const deadline = Date.now() + 60000;
     let lb = [];
     while (Date.now() < deadline) {
-      lb = (await http('GET', '/api/leaderboard', null, sBlue)).data.rows;
+      lb = (await http('GET', '/api/catan/leaderboard', null, sBlue)).data.rows;
       if (lb.length) break;
       await sleep(300);
     }
     assert.ok(lb.length >= 1, '对局结束后应出现在排行榜');
-    const me = (await http('GET', '/api/me', null, sRed)).data;
+    const me = (await http('GET', '/api/catan/me', null, sRed)).data;
     assert.strictEqual(me.stats.games, 1);
     assert.strictEqual(me.recent.length, 1);
     assert.strictEqual(me.recent[0].players, 3);
@@ -200,8 +227,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // ---------- 删除账号：战绩保留名字 ----------
     await http('DELETE', `/api/admin/users/${uid('小蓝')}`, null, adm);
-    assert.strictEqual((await http('GET', '/api/me', null, sBlue)).status, 401, '删除后会话失效');
-    const after = (await http('GET', '/api/me', null, sRed)).data;
+    assert.strictEqual((await http('GET', '/api/catan/me', null, sBlue)).status, 401, '删除后会话失效');
+    const after = (await http('GET', '/api/catan/me', null, sRed)).data;
     assert.strictEqual(after.recent.length, 1, '删除其他账号不影响自己的战绩');
     console.log('✓ 删除账号');
 

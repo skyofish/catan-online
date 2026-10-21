@@ -1,9 +1,9 @@
 'use strict';
 // 用电脑玩家自动对局，验证规则引擎在 4/6/8 人地图上都能完整跑完。
 const assert = require('assert');
-const { Game, sumRes } = require('../server/game');
-const { botAction } = require('../server/bot');
-const { RES, LAYOUTS } = require('../server/board');
+const { Game, sumRes } = require('../server/games/catan/game');
+const { botAction } = require('../server/games/catan/bot');
+const { RES, LAYOUTS } = require('../server/games/catan/board');
 
 function invariants(g) {
   const size = g.layout.bank;
