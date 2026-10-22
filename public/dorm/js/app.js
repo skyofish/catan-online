@@ -444,6 +444,14 @@ function onEvent(e, pm) {
       sound.play('hitBed', { near: near(e.room) });
       if (e.room === myIdx && navigator.vibrate) navigator.vibrate([40, 30, 40]);
       break;
+    case 'hitCell':
+      sound.play('hitDoor', { near: near(e.room) * 0.8 });
+      if (e.room === myIdx && navigator.vibrate) navigator.vibrate(20);
+      break;
+    case 'wreck':
+      sound.play('wreck', { near: near(e.room) });
+      if (e.room === myIdx) banner(`${S.cfg.BUILD[e.btype] ? S.cfg.BUILD[e.btype].name : '储物柜'}被砸烂了`, '它离床越来越近了……');
+      break;
     case 'doorBroken':
       sound.play('doorBroken', { near: near(e.room) });
       setTimeout(() => sound.play('laugh', { near: near(e.room) }), 900);
@@ -512,7 +520,8 @@ function renderHud() {
     sleep: '沉睡中',
     hunt: gh.target !== null ? `前往 ${gh.target + 1} 号房` : '游荡',
     door: `砸 ${gh.target + 1} 号房的门`,
-    bed: `在 ${gh.target + 1} 号房里`,
+    smash: `在 ${gh.target + 1} 号房里砸东西`,
+    bed: `扑向 ${gh.target + 1} 号房的床`,
     retreat: '逃回血池',
     heal: '在血池回血',
     dead: '已消散',
@@ -531,12 +540,13 @@ function renderHud() {
   }
   // 危险提示与紧张度
   const mr = myRoom();
-  const targeted = mr && p && p.alive && gh.target === mr.i && ['hunt', 'door', 'bed'].includes(gh.state);
-  const attacking = targeted && (gh.state === 'door' || gh.state === 'bed');
-  $('#danger').classList.toggle('on', !!attacking && (gh.state === 'bed' || mr.door[1] < mr.door[2] * 0.4));
+  const targeted = mr && p && p.alive && gh.target === mr.i && ['hunt', 'door', 'smash', 'bed'].includes(gh.state);
+  const attacking = targeted && ['door', 'smash', 'bed'].includes(gh.state);
+  const inside = targeted && (gh.state === 'smash' || gh.state === 'bed' || mr.door[1] <= 0);
+  $('#danger').classList.toggle('on', !!attacking && (inside || mr.door[1] < mr.door[2] * 0.4));
   let ten = g.phase === 'play' ? 0.15 : 0;
   if (targeted) ten = 0.45;
-  if (attacking) ten = 0.55 + (1 - mr.door[1] / mr.door[2]) * 0.35 + (gh.state === 'bed' ? 0.3 : 0);
+  if (attacking) ten = 0.55 + (1 - mr.door[1] / mr.door[2]) * 0.35 + (inside ? 0.3 : 0);
   sound.setTension(ten);
   $('#btn-focus').hidden = !p;
   $('#btn-focus').textContent = stage && stage.focusMode !== 'all' ? '全图' : p && p.st === 'bed' ? '我的宿舍' : '跟着我';
@@ -666,38 +676,98 @@ function closeSheet() {
   $('#sheet').hidden = true;
 }
 
-function statLine(type, lv) {
+// 某道具第 i 级（从 0 开始）的效果
+function effectAt(type, i) {
   const b = S.cfg.BUILD[type];
-  const i = lv - 1;
-  const nx = (arr, f = (x) => x) => (arr[i + 1] !== undefined ? ` → ${f(arr[i + 1])}` : '');
   const pct = (x) => Math.round(x * 100) + '%';
   switch (type) {
     case 'turret':
     case 'thunder':
     case 'sword':
-      return `伤害 ${b.dmg[i]}${nx(b.dmg)} · 每 ${b.cd} 秒一发 · 射程 ${b.range}`;
+      return `伤害 ${b.dmg[i]}，每 ${b.cd} 秒一发，射程 ${b.range}`;
     case 'talisman':
-      return `伤害 ${b.dmg[i]}${nx(b.dmg)} · 灼烧每秒 ${b.burn[i]}${nx(b.burn)}（${b.burnTime} 秒，无视护甲）· 射程 ${b.range}`;
+      return `伤害 ${b.dmg[i]}，灼烧每秒 ${b.burn[i]}（${b.burnTime} 秒，无视护甲），射程 ${b.range}`;
     case 'trap':
-      return `夹一下 ${b.dmg[i]}${nx(b.dmg)} · 定住 ${b.root} 秒 · 每 ${b.cd} 秒 · 范围 ${b.range}`;
+      return `夹一下 ${b.dmg[i]}，定住 ${b.root} 秒，每 ${b.cd} 秒，范围 ${b.range}`;
     case 'bell':
-      return `定身 ${b.stun[i]}${nx(b.stun)} 秒 · 每 ${b.cd[i]} 秒摇一次 · 范围 ${b.range}`;
+      return `定身 ${b.stun[i]} 秒，每 ${b.cd[i]} 秒摇一次，范围 ${b.range}`;
     case 'lantern':
-      return `相邻攻击建筑伤害 +${pct(b.boost[i])}${nx(b.boost, pct)}`;
+      return `相邻攻击建筑伤害 +${pct(b.boost[i])}`;
     case 'cat':
-      return `每秒 +${b.gold[i]}${nx(b.gold)} 金币`;
+      return `每秒 +${b.gold[i]} 金币`;
     case 'altar':
-      return `每秒修床 ${b.heal[i]}${nx(b.heal)} · 床血量 +${pct(b.bedHp[i])}${nx(b.bedHp, pct)}`;
+      return `每秒修道具 ${b.heal[i]}，屋里道具耐久 +${pct(b.hpBoost[i])}`;
     case 'frost':
-      return `减速 ${pct(b.slow[i])}${nx(b.slow, pct)} · 范围 ${b.range}`;
+      return `减速 ${pct(b.slow[i])}，范围 ${b.range}`;
     case 'mirror':
-      return `反弹 ${pct(b.reflect[i])}${nx(b.reflect, pct)}`;
+      return `反弹 ${pct(b.reflect[i])}`;
     case 'repair':
-      return `每秒修门 ${b.heal[i]}${nx(b.heal)}`;
+      return `每秒修门 ${b.heal[i]}`;
     case 'generator':
-      return `每秒发电 ${b.energy[i]}${nx(b.energy)}`;
+      return `每秒发电 ${b.energy[i]}`;
   }
   return '';
+}
+const itemHp = (type, lv) => {
+  const H = S.cfg.ITEM_HP;
+  return Math.round(H.base * Math.pow(H.grow, lv - 1) * (H.mul[type] || 1));
+};
+function statLine(type, lv) {
+  const b = S.cfg.BUILD[type];
+  const next = lv < b.cost.length ? `<br><span class="muted">下一级：${effectAt(type, lv)}</span>` : '';
+  return `${effectAt(type, lv - 1)}，耐久 ${itemHp(type, lv)}${next}`;
+}
+
+// 道具详情：每一级的花费、效果、耐久
+function itemInfoHTML(type) {
+  const b = S.cfg.BUILD[type];
+  const rows = b.cost
+    .map((c, i) => `<tr><td>${i + 1}</td><td class="cost">${costHTML(c)}</td><td>${effectAt(type, i)}</td><td>${itemHp(type, i + 1)}</td></tr>`)
+    .join('');
+  return `<div class="detail"><span data-icon="${type}" data-size="56"></span><div class="info"><b>${b.name}</b><br>${esc(b.desc)}</div></div>
+    <table class="info-table"><tr><th>级</th><th>花费</th><th>效果</th><th>耐久</th></tr>${rows}</table>`;
+}
+function showItemInfo(type) {
+  sound.play('click');
+  modal(`${itemInfoHTML(type)}<div class="actions"><button class="btn dark" data-close-modal>知道了</button></div>`);
+  $$('#modal-root [data-icon]').forEach((s) => s.replaceWith(icon(s.dataset.icon, 1, 56)));
+}
+// 道具图鉴（帮助里）
+function codexHTML() {
+  return `<h4 class="codex-title">道具图鉴 <small>点一项看每级数据</small></h4><ul class="codex">${S.cfg.BUILD_TYPES.map(
+    (t) => `<li data-info="${t}"><span data-icon="${t}" data-size="32"></span><b>${S.cfg.BUILD[t].name}</b><small>${esc(S.cfg.BUILD[t].desc)}</small></li>`
+  ).join('')}</ul>`;
+}
+function mountCodex(root) {
+  $$('[data-icon]', root).forEach((s) => s.replaceWith(icon(s.dataset.icon, 1, Number(s.dataset.size) || 32)));
+  $$('[data-info]', root).forEach((li) => li.addEventListener('click', () => showItemInfo(li.dataset.info)));
+}
+// 长按（手机）或右键（电脑）显示详情，不触发建造
+function bindLongPress(el, type, onTap) {
+  let timer = null;
+  let long = false;
+  el.addEventListener('pointerdown', () => {
+    long = false;
+    timer = setTimeout(() => {
+      long = true;
+      if (navigator.vibrate) navigator.vibrate(15);
+      showItemInfo(type);
+    }, 450);
+  });
+  const cancel = () => clearTimeout(timer);
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('pointercancel', cancel);
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    cancel();
+    long = true;
+    showItemInfo(type);
+  });
+  el.addEventListener('click', () => {
+    if (long) return;
+    onTap();
+  });
 }
 
 function renderSheet() {
@@ -726,11 +796,11 @@ function renderSheet() {
   S.sheetKey = key;
   el.hidden = false;
   if (!cell) {
-    el.innerHTML = `<div class="sheet-head"><b>在这一格建造</b><button class="x" data-close aria-label="关闭">✕</button></div>
+    el.innerHTML = `<div class="sheet-head"><b>在这一格建造 <small class="muted">长按看详情</small></b><button class="x" data-close aria-label="关闭">✕</button></div>
       <div class="builds">${BT().map((t) => {
         const b = cfg.BUILD[t];
         const c = b.cost[0];
-        return `<button class="bcard" data-build="${t}" title="${esc(b.desc)}" ${afford(c, p) ? '' : 'disabled'}><span data-icon="${t}"></span><b>${b.name}</b><small>${b.desc}</small><span class="cost">${costHTML(c, p)}</span></button>`;
+        return `<button class="bcard ${afford(c, p) ? '' : 'off'}" data-build="${t}" title="${esc(b.desc)}" ${afford(c, p) ? '' : 'aria-disabled="true"'}><span data-icon="${t}"></span><b>${b.name}</b><small>${b.desc}</small><span class="cost">${costHTML(c, p)}</span></button>`;
       }).join('')}</div>`;
   } else if (cell[0] === 'chest') {
     el.innerHTML = `<div class="sheet-head"><b>旧储物柜</b><button class="x" data-close aria-label="关闭">✕</button></div>
@@ -751,17 +821,24 @@ function renderSheet() {
     el.innerHTML = `<div class="sheet-head"><b>${b.name} · ${lv} 级</b><button class="x" data-close aria-label="关闭">✕</button></div>
       <div class="detail"><span data-icon="${type}" data-lv="${lv}" data-size="56"></span><div class="info">${b.desc}<br>${statLine(type, lv)}</div></div>
       <div class="detail-actions">
+        <button class="btn dark small" data-more="${type}">每级数据</button>
         <button class="btn dark" data-sell>拆掉 <small>+${Math.floor(spentG * cfg.SELL_RATE)} 金${spentE ? ` +${Math.floor(spentE * cfg.SELL_RATE)} 电` : ''}</small></button>
         <button class="btn fu" data-upgrade ${c && afford(c, p) ? '' : 'disabled'}>${c ? `升级 ${costHTML(c)}` : '已满级'}</button>
       </div>`;
   }
   $$('[data-icon]', el).forEach((s) => s.replaceWith(icon(s.dataset.icon, Number(s.dataset.lv) || 1, Number(s.dataset.size) || 40)));
   $$('[data-build]', el).forEach((btn) =>
-    btn.addEventListener('click', () => {
+    bindLongPress(btn, btn.dataset.build, () => {
+      if (btn.classList.contains('off')) {
+        sound.play('error');
+        return toast('还买不起，长按可以看详情', true);
+      }
       send('act', { type: 'build', cell: sel.cell, btype: btn.dataset.build });
       S.sheetKey = '';
     })
   );
+  const more = $('[data-more]', el);
+  if (more) more.addEventListener('click', () => showItemInfo(more.dataset.more));
   const op = $('[data-open]', el);
   if (op)
     op.addEventListener('click', () => {
@@ -983,7 +1060,8 @@ $('#btn-menu').addEventListener('click', () => {
     send('leave');
   });
   $('#m-help').addEventListener('click', () => {
-    modal(`<h3>怎么玩</h3><div class="help">${$('[data-pane="help"]').innerHTML}</div><div class="actions"><button class="btn dark" data-close-modal>知道了</button></div>`);
+    modal(`<h3>怎么玩</h3><div class="help">${$('[data-pane="help"] ol').outerHTML}${codexHTML()}</div><div class="actions"><button class="btn dark" data-close-modal>知道了</button></div>`);
+    mountCodex($('#modal-root'));
   });
 });
 $('#btn-chat').addEventListener('click', () => {
@@ -1047,6 +1125,9 @@ document.addEventListener('visibilitychange', () => {
 (async () => {
   try {
     S.cfg = await api('/api/dorm/config');
+    const pane = $('[data-pane="help"]');
+    pane.insertAdjacentHTML('beforeend', codexHTML());
+    mountCodex(pane);
   } catch {
     toast('暂时连不上服务器，请稍后刷新', true);
     return;

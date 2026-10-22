@@ -121,7 +121,7 @@ module.exports = function createDorm(platform) {
       v.map = g.map;
     }
     v.rooms = g.rooms.map((r) => {
-      if (conn.roomVers[r.i] === r.ver) return { i: r.i, door: [r.door.lv, Math.round(r.door.hp), r.door.max], bed: [r.bed.lv, Math.round(r.bed.hp), r.bed.max], stun: r.stunUntil > g.t ? 1 : 0 };
+      if (conn.roomVers[r.i] === r.ver) return { i: r.i, door: [r.door.lv, Math.round(r.door.hp), r.door.max], bed: [r.bed.lv], stun: r.stunUntil > g.t ? 1 : 0 };
       conn.roomVers[r.i] = r.ver;
       return g.roomView(r);
     });

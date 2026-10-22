@@ -40,7 +40,7 @@ function play(diff, levels, seed = 1) {
     assert.strictEqual(new Set(owners).size, owners.length, '一人只能占一间宿舍');
     for (const r of g.rooms) {
       assert.ok(r.door.hp >= 0 && r.door.hp <= r.door.max + 1e-6);
-      assert.ok(r.bed.hp >= 0 && r.bed.hp <= r.bed.max + 1e-6);
+      for (const c of r.cells) if (c) assert.ok(c.hp > 0 && c.hp <= c.max + 1e-6, '道具耐久在 (0, 上限]');
       assert.strictEqual(r.cells.length, g.geo[r.i].cells.length);
     }
     // 走路的人不会穿墙，躺下的人在自己的床上
@@ -48,6 +48,8 @@ function play(diff, levels, seed = 1) {
       if (p.state === 'bed') assert.ok(g.geo[p.room].bed.tiles.some(([x, y]) => Math.abs(p.x - x - 0.5) <= 1 && Math.abs(p.y - y - 0.5) <= 1));
       else assert.ok('.LErD'.includes(g.tile(Math.floor(p.x), Math.floor(p.y))), `玩家站在 ${g.tile(Math.floor(p.x), Math.floor(p.y))} 上`);
     }
+    // 猛鬼在屋里时，不会站在还没砸掉的道具上
+    if (g.phase === 'play' && g.ghost.state === 'smash') assert.ok(g.rooms[g.ghost.target].cells[g.ghost.smash], '正在砸的道具应存在');
     if (g.phase === 'play' && !['retreat', 'heal'].includes(g.ghost.state)) assert.ok('.LErDE'.includes(g.tile(Math.floor(g.ghost.x), Math.floor(g.ghost.y))), '猛鬼不能穿墙');
     assert.ok(g.ghost.hp >= 0 && g.ghost.hp <= g.ghost.max + 1e-6);
   }

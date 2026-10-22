@@ -344,6 +344,11 @@ class HorrorAudio {
         this.bell(t, 659.25, 0.08, 1.5);
         this.bell(t + 0.15, 987.77, 0.08, 1.5);
         break;
+      case 'wreck':
+        this.noise(t, 0.7, { gain: 0.4 * k, type: 'lowpass', freq: 3000, sweepTo: 250, q: 0.6, rev: 0.6 });
+        this.thud(t, 110, 0.45 * k, 0.3);
+        for (let i = 0; i < 4; i++) this.noise(t + 0.05 + Math.random() * 0.3, 0.04, { gain: 0.1 * k, type: 'highpass', freq: 3000 + Math.random() * 3000 });
+        break;
       case 'step':
         this.noise(t, 0.05, { gain: 0.06, type: 'bandpass', freq: 700, q: 2 });
         this.noise(t + 0.18, 0.05, { gain: 0.05, type: 'bandpass', freq: 600, q: 2 });

@@ -54,7 +54,7 @@ function candidates(g, pid, focus = {}) {
   const armor = GHOST.armor(lvNext) * D.armorMul;
   const remaining = g.timeLeft();
   const income = Math.max(1, g.income(p));
-  const targeted = gh.target === r.i && (gh.state === 'hunt' || gh.state === 'door' || gh.state === 'bed');
+  const targeted = gh.target === r.i && ['hunt', 'door', 'smash', 'bed'].includes(gh.state);
   const threat = targeted ? 2 : 1;
   const wealth = income * 150;
 
@@ -168,8 +168,10 @@ function candidates(g, pid, focus = {}) {
       case 'cat':
         return ecoVal(b.gold[lv] - (lv ? b.gold[lv - 1] : 0), 1) * 0.9;
       case 'altar': {
-        const d = (b.heal[lv] - (lv ? b.heal[lv - 1] : 0)) * 20 + BED.hp[r.bed.lv - 1] * (b.bedHp[lv] - (lv ? b.bedHp[lv - 1] : 0));
-        return defVal(d, 1) * 0.35;
+        // 香案：修屋里被砸的道具、让道具更结实——屋里道具越多越值
+        const items = r.cells.filter((x) => x && x.type !== 'chest').length;
+        const d = (b.heal[lv] - (lv ? b.heal[lv - 1] : 0)) * 15 + items * 420 * (b.hpBoost[lv] - (lv ? b.hpBoost[lv - 1] : 0));
+        return defVal(d, 1) * 0.3;
       }
       case 'repair':
         return defVal((b.heal[lv] - (lv ? b.heal[lv - 1] : 0)) * 25, 1);

@@ -582,6 +582,26 @@ export class Stage {
         this.fx.shake = Math.max(this.fx.shake, mine(e.room) ? 0.5 : 0.2);
         break;
       }
+      case 'hitCell': {
+        const c = this.cellC(e.room, e.cell);
+        this.burst(c.x, c.y, 5, '#7a5130', 2.2, 0.06, 4, 0.5);
+        this.ghostAttack = 1;
+        this.anim.doorShake.set(key, now);
+        this.fx.marks.push({ x: c.x, y: c.y, t0: now, dur: 0.45, kind: 'claw', rot: Math.random() * 0.8 - 0.4 });
+        this.fx.texts.push({ x: c.x, y: c.y, dy: -0.3, text: '-' + e.dmg, color: '#ff6b6b', t0: now, size: 0.32 });
+        if (mine(e.room)) this.fx.shake = Math.max(this.fx.shake, 0.1);
+        break;
+      }
+      case 'wreck': {
+        // 道具被砸烂：碎片四溅
+        const c = this.cellC(e.room, e.cell);
+        this.burst(c.x, c.y, 26, '#6a4a2a', 4, 0.09, 5, 1);
+        this.burst(c.x, c.y, 10, '#2a2a2a', 2, 0.14, 0.5, 1.2);
+        this.fx.rings.push({ x: c.x, y: c.y, t0: now, dur: 0.5, color: '255,120,60', r: 1.2 });
+        this.fx.decals.push({ x: c.x, y: c.y, t0: now, dur: 9999, kind: 'scorch' });
+        if (mine(e.room)) this.fx.shake = Math.max(this.fx.shake, 0.25);
+        break;
+      }
       case 'hitBed': {
         const b = R(e.room).bed;
         this.burst(b.cx, b.cy, 10, '#a3000c', 2.5, 0.07, 3, 0.9);
@@ -940,7 +960,6 @@ export class Stage {
         ctx.fillStyle = r && r.dead ? '#8a3a40' : owner ? owner.color : 'rgba(217,192,111,0.7)';
         ctx.fillText(label, 0, 0.01, 4.6);
       });
-      if (r && r.bed && r.bed[1] < r.bed[2] && !r.dead) this.bar(geo.bed.cx, geo.bed.cy, r.bed[1] / r.bed[2], '#e05050', 1.3, -0.75);
     }
   }
 
@@ -953,7 +972,7 @@ export class Stage {
     for (let idx = 0; idx < r.cells.length; idx++) {
       const c = r.cells[idx];
       if (!c) continue;
-      const [type, lv] = c;
+      const [type, lv, pct] = c;
       const cc = geo.cellC[idx];
       const key = `${geo.i}:${idx}`;
       // 弩的朝向（转置时 x、y 互换）
@@ -981,6 +1000,14 @@ export class Stage {
         drawBuilding(ctx, type, lv, { t: t + idx, aim: sAim, stunned: r.stun > 0, charge, recoil, ring, snap: Math.max(snap, 0), swing: 0 });
         ctx.globalAlpha = 1;
       });
+      // 被砸的道具：耐久条，快坏时冒烟
+      if (pct) {
+        this.bar(cc.x, cc.y, pct / 100, pct < 35 ? '#ff4040' : '#d9a441', 0.8, -0.52);
+        if (pct < 35 && Math.random() < 0.08) this.fx.parts.push({ x: cc.x + (Math.random() - 0.5) * 0.4, y: cc.y, vx: 0, vy: -0.6, life: 0.8, max: 0.8, color: 'rgba(90,90,90,0.5)', size: 0.12, grav: 0 });
+      }
+      // 被砸时抖一下
+      const hitT = this.anim.doorShake.get(key);
+      if (hitT && t - hitT < 0.2) this.burst(cc.x, cc.y, 1, '#7a5130', 1.5, 0.05, 3, 0.4);
       // 升级：金色光柱
       const upT = this.anim.upgrade.get(key);
       if (upT && t - upT < 0.7) {
@@ -1023,9 +1050,12 @@ export class Stage {
       } else if (type === 'repair' && room.door && room.door[1] > 0 && room.door[1] < room.door[2]) {
         this.ambient.set(key, t + 0.6);
         this.fx.bolts.push({ kind: 'drop', from: cc, to: { x: geo.door.x + 0.5, y: geo.door.y + 0.5 }, t0: t, dur: 0.7, color: '#7fffd0' });
-      } else if (type === 'altar' && room.bed && room.bed[1] < room.bed[2]) {
-        this.ambient.set(key, t + 0.7);
-        this.fx.bolts.push({ kind: 'drop', from: cc, to: { x: geo.bed.cx, y: geo.bed.cy }, t0: t, dur: 0.8, color: '#ffd8a0' });
+      } else if (type === 'altar' && room.cells.some((x) => x && x[2])) {
+        // 香案：给被砸坏的道具送去金色光点
+        this.ambient.set(key, t + 0.5);
+        const hurt = room.cells.map((x, k) => (x && x[2] ? k : -1)).filter((k) => k >= 0);
+        const k = hurt[Math.floor(Math.random() * hurt.length)];
+        this.fx.bolts.push({ kind: 'drop', from: cc, to: geo.cellC[k], t0: t, dur: 0.8, color: '#ffd8a0' });
       } else if (type === 'frost' && ghostActive && Math.hypot(gp.x - cc.x, gp.y - cc.y) <= RANGE.frost) {
         this.ambient.set(key, t + 0.25);
         this.fx.bolts.push({ kind: 'snow', from: cc, to: { ...gp }, t0: t, dur: 0.6, wob: Math.random() * 6 });

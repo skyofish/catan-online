@@ -3,7 +3,7 @@
 // 开局所有人在宿舍楼入口集合，自己走进一间空宿舍、躺到床上就占下了这间（一间只能一个人）。
 // 躺下后床每秒产金币，造防御、升级床和门；猛鬼醒来后不断升级，挑一间宿舍砸门，门破后攻击床，床毁则出局。
 // 坚持到天亮（或打死猛鬼）即胜利。地图每局随机（mapgen.js）。
-const { BED, DOOR, BUILD, BUILD_TYPES, ATTACKERS, PROPS, SELL_RATE, GHOST, DIFFICULTY, PLAYER } = require('./config');
+const { BED, DOOR, BUILD, ATTACKERS, PROPS, SELL_RATE, GHOST, DIFFICULTY, PLAYER, itemMaxHp } = require('./config');
 const { generateMap, findPath } = require('./mapgen');
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -58,7 +58,7 @@ class DormGame {
       owner: null,
       dead: false,
       door: { lv: 1, hp: DOOR.hp[0], max: DOOR.hp[0] },
-      bed: { lv: 1, hp: BED.hp[0], max: BED.hp[0] },
+      bed: { lv: 1 },
       cells: new Array(g.cells.length).fill(null),
       stunUntil: 0,
       ver: 1,
@@ -133,12 +133,28 @@ class DormGame {
           const energy = this.rng() < C.energyChance;
           const range = energy ? C.energy : C.gold;
           const amt = Math.round(range[0] + this.rng() * (range[1] - range[0]));
-          r.cells[idx] = { type: 'chest', lv: 1, loot: energy ? { e: amt } : { g: amt } };
+          const hp = itemMaxHp('chest', 1);
+          r.cells[idx] = { type: 'chest', lv: 1, hp, max: hp, loot: energy ? { e: amt } : { g: amt } };
         } else {
           const c = BUILD[type].cost[0];
-          r.cells[idx] = { type, lv: 1, cd: 0, spent: { g: c.g || 0, e: c.e || 0 }, prop: true };
+          const hp = itemMaxHp(type, 1);
+          r.cells[idx] = { type, lv: 1, cd: 0, hp, max: hp, spent: { g: c.g || 0, e: c.e || 0 }, prop: true };
         }
       }
+      this.recalcItems(r);
+    }
+  }
+
+  // 道具耐久上限（等级 + 香案加成）；上限提高时同时补上差值
+  recalcItems(r) {
+    const boost = Math.min(1, this.sumOf(r, 'altar', 'hpBoost'));
+    for (const c of r.cells) {
+      if (!c) continue;
+      const max = itemMaxHp(c.type, c.lv, c.type === 'chest' ? 0 : boost);
+      if (c.max === undefined) c.hp = c.max = max;
+      if (max > c.max) c.hp += max - c.max;
+      c.max = max;
+      c.hp = Math.min(c.hp, max);
     }
   }
 
@@ -267,13 +283,6 @@ class DormGame {
   timeLeft() {
     if (this.phase === 'prep') return this.duration;
     return Math.max(0, this.duration - this.playT);
-  }
-  // 床的血量上限：等级 + 香案加成
-  recalcBed(r) {
-    const max = Math.round(BED.hp[r.bed.lv - 1] * (1 + Math.min(1, this.sumOf(r, 'altar', 'bedHp'))));
-    if (max > r.bed.max) r.bed.hp += max - r.bed.max;
-    r.bed.max = max;
-    r.bed.hp = Math.min(r.bed.hp, max);
   }
 
   // ---------------- 玩家操作 ----------------
@@ -424,7 +433,7 @@ class DormGame {
     r.cells[idx] = { type: a.btype, lv: 1, cd: 0, spent: { g: c.g || 0, e: c.e || 0 } };
     r.ver++;
     p.stats.built++;
-    if (a.btype === 'altar') this.recalcBed(r);
+    this.recalcItems(r);
     this.emit({ type: 'build', room: r.i, cell: idx, btype: a.btype, lv: 1, pid: p.id });
   }
 
@@ -442,7 +451,9 @@ class DormGame {
     cell.spent.g += c.g || 0;
     cell.spent.e += c.e || 0;
     r.ver++;
-    if (cell.type === 'altar') this.recalcBed(r);
+    // 升级后修好
+    this.recalcItems(r);
+    cell.hp = cell.max;
     this.emit({ type: 'build', room: r.i, cell: idx, btype: cell.type, lv: cell.lv, pid: p.id });
   }
 
@@ -455,7 +466,7 @@ class DormGame {
     p.energy += Math.floor(cell.spent.e * SELL_RATE);
     r.cells[idx] = null;
     r.ver++;
-    if (cell.type === 'altar') this.recalcBed(r);
+    if (cell.type === 'altar') this.recalcItems(r);
     this.emit({ type: 'sell', room: r.i, cell: idx, pid: p.id });
   }
 
@@ -479,7 +490,6 @@ class DormGame {
     if (!afford(p, c)) throw new Error(lack(p, c));
     pay(p, c);
     r.bed.lv++;
-    this.recalcBed(r);
     r.ver++;
     this.emit({ type: 'bed', room: r.i, lv: r.bed.lv, pid: p.id });
   }
@@ -569,9 +579,19 @@ class DormGame {
         const h = this.repairOf(r);
         if (h) r.door.hp = Math.min(r.door.max, r.door.hp + h * dt);
       }
-      if (r.bed.hp < r.bed.max) {
-        const h = this.sumOf(r, 'altar', 'heal');
-        if (h) r.bed.hp = Math.min(r.bed.max, r.bed.hp + h * dt);
+      // 香案：修补被砸坏的道具
+      const h = this.sumOf(r, 'altar', 'heal');
+      if (h) {
+        for (const c of r.cells) {
+          if (c && c.hp < c.max) {
+            c.hp = Math.min(c.max, c.hp + h * dt);
+            r.healTick = (r.healTick || 0) + dt;
+          }
+        }
+        if (r.healTick > 1) {
+          r.healTick = 0;
+          r.ver++;
+        }
       }
     }
   }
@@ -587,10 +607,12 @@ class DormGame {
     const eff = gd * (1 - this.slowAt(g.atkDoor));
     const repair = r.door.hp > 0 ? this.repairOf(r) : 0;
     const doorTime = r.door.hp > 0 ? r.door.hp / Math.max(1, eff - repair) : 0;
-    const bedTime = r.bed.hp / Math.max(1, gd * (1 - this.slowAt(g.atkBed)) - this.sumOf(r, 'altar', 'heal'));
+    // 屋里：一路砸开挡路的道具走到床边要多久
+    const inside = this.interior(r.i, { x: g.door.x, y: g.door.y });
+    const bedTime = (inside ? inside.cost : 5) + GHOST.hitEvery;
     const travel = dist(this.ghost, g.hallPt) / GHOST.speed(this.ghost.lv);
     const dps = this.dpsAt(g.atkDoor) + eff * this.reflectOf(r);
-    const taken = dps * doorTime + this.dpsAt(g.atkBed) * bedTime;
+    const taken = dps * doorTime + this.dpsAt(g.center) * bedTime;
     const ttk = doorTime + bedTime + travel;
     return { ttk, taken, risk: taken / Math.max(1, this.ghost.hp), feasible: eff > repair * 1.05 };
   }
@@ -618,7 +640,7 @@ class DormGame {
         break;
       }
     } else if (smart === 1) {
-      pick = this.rng() < 0.6 ? list.reduce((a, b) => (b.door.hp + b.bed.hp < a.door.hp + a.bed.hp ? b : a)) : list[Math.floor(this.rng() * list.length)];
+      pick = this.rng() < 0.6 ? list.reduce((a, b) => (b.door.hp < a.door.hp ? b : a)) : list[Math.floor(this.rng() * list.length)];
     } else {
       const scored = list.map((r) => ({ r, s: this.scoreRoom(r) * (1 + (smart === 2 ? this.rng() * 0.5 : this.rng() * 0.15)) }));
       scored.sort((a, b) => a.s - b.s);
@@ -652,8 +674,9 @@ class DormGame {
         to = geo.outside;
         tail = geo.atkDoor;
       } else {
-        to = { x: geo.front[0], y: geo.front[1] };
-        tail = geo.atkBed;
+        // 门破了：先走到门口，进门后再一路砸过去（见 arrive / planInside）
+        to = geo.door;
+        tail = { x: geo.door.x + 0.5, y: geo.door.y + 0.5 };
       }
     }
     const path = findPath(this.map, g, to, pass) || [];
@@ -689,7 +712,7 @@ class DormGame {
     } else if (g.state === 'heal') {
       g.hp = Math.min(g.max, g.hp + g.max * this.D.healRate * dt);
       if (g.hp >= g.max * 0.95) this.pickTarget();
-    } else if ((g.state === 'door' || g.state === 'bed') && !stunned) {
+    } else if ((g.state === 'door' || g.state === 'bed' || g.state === 'smash') && !stunned) {
       this.attack(dt);
     }
 
@@ -712,15 +735,101 @@ class DormGame {
     const r = this.rooms[g.target];
     if (!r || r.dead || !r.owner) return this.pickTarget();
     const geo = this.geo[r.i];
-    if (dist(g, geo.atkBed) < 0.05) {
-      g.state = 'bed';
-      g.hitCd = 0.4;
-    } else if (r.door.hp > 0) {
-      g.state = 'door';
-      g.hitCd = 0.4;
-    } else {
-      g.path = this.pathTo(r.i);
+    if (r.door.hp > 0) {
+      if (dist(g, geo.atkDoor) < 0.05) {
+        g.state = 'door';
+        g.hitCd = 0.4;
+      } else g.path = this.pathTo(r.i);
+      return;
     }
+    if (dist(g, geo.atkBed) < 0.05) {
+      // 到了床边：举起手……一下就够了
+      g.state = 'bed';
+      g.hitCd = 0.8;
+      return;
+    }
+    const inRoom = this.roomAt(g.x, g.y) === r.i;
+    if (!inRoom) {
+      g.path = this.pathTo(r.i);
+      return;
+    }
+    if (g.smash !== null && g.smash !== undefined && r.cells[g.smash]) {
+      g.state = 'smash';
+      g.hitCd = 0.4;
+      return;
+    }
+    this.planInside(r);
+  }
+
+  // 屋里的寻路：道具挡路时算「砸开要多久」，选总时间最短的路线（4 方向，Dijkstra）
+  interior(ri, from) {
+    const geo = this.geo[ri];
+    const r = this.rooms[ri];
+    const W = this.map.W;
+    const gd = Math.max(1, this.ghostDmg() / GHOST.hitEvery);
+    const step = 1 / GHOST.speed(this.ghost.lv);
+    const goal = geo.front[1] * W + geo.front[0];
+    const start = Math.floor(from.y) * W + Math.floor(from.x);
+    const cost = new Map([[start, 0]]);
+    const prev = new Map();
+    const open = [[0, start]];
+    while (open.length) {
+      open.sort((a, b) => a[0] - b[0]);
+      const [c, k] = open.shift();
+      if (c > cost.get(k)) continue;
+      if (k === goal) break;
+      const x = k % W;
+      const y = Math.floor(k / W);
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (this.roomAt(nx + 0.5, ny + 0.5) !== ri && !(nx === geo.door.x && ny === geo.door.y)) continue;
+        const t = this.tile(nx, ny);
+        if (t !== 'r' && t !== 'D') continue;
+        let w = step;
+        const ce = this.cellAt.get(`${nx},${ny}`);
+        const item = ce && r.cells[ce[1]];
+        if (item) w += item.hp / gd;
+        const nk = ny * W + nx;
+        if (!cost.has(nk) || c + w < cost.get(nk)) {
+          cost.set(nk, c + w);
+          prev.set(nk, k);
+          open.push([c + w, nk]);
+        }
+      }
+    }
+    if (!cost.has(goal)) return null;
+    const tiles = [];
+    for (let k = goal; k !== start && k !== undefined; k = prev.get(k)) tiles.push([k % W, Math.floor(k / W)]);
+    tiles.reverse();
+    return { cost: cost.get(goal), tiles };
+  }
+
+  planInside(r) {
+    const g = this.ghost;
+    const geo = this.geo[r.i];
+    const plan = this.interior(r.i, g);
+    g.smash = null;
+    const path = [];
+    if (plan) {
+      for (const [x, y] of plan.tiles) {
+        const ce = this.cellAt.get(`${x},${y}`);
+        if (ce && r.cells[ce[1]]) {
+          g.smash = ce[1];
+          break;
+        }
+        path.push({ x: x + 0.5, y: y + 0.5 });
+      }
+    }
+    if (g.smash === null) path.push({ x: geo.atkBed.x, y: geo.atkBed.y });
+    g.state = 'hunt';
+    g.path = path;
+    if (!path.length) this.arrive();
   }
 
   attack(dt) {
@@ -769,10 +878,22 @@ class DormGame {
         g.state = 'hunt';
         g.path = this.pathTo(r.i);
       }
+    } else if (g.state === 'smash') {
+      const c = r.cells[g.smash];
+      if (!c) return this.planInside(r);
+      c.hp = Math.max(0, c.hp - dmg);
+      r.ver++;
+      this.emit({ type: 'hitCell', room: r.i, cell: g.smash, dmg });
+      if (c.hp <= 0) {
+        r.cells[g.smash] = null;
+        this.emit({ type: 'wreck', room: r.i, cell: g.smash, btype: c.type });
+        if (c.type === 'altar') this.recalcItems(r);
+        this.planInside(r);
+      }
     } else {
-      r.bed.hp = Math.max(0, r.bed.hp - dmg);
+      // 床没有血量：一下就淘汰
       this.emit({ type: 'hitBed', room: r.i, dmg });
-      if (r.bed.hp <= 0) this.killRoom(r);
+      this.killRoom(r);
     }
   }
 
@@ -882,8 +1003,9 @@ class DormGame {
       owner: r.owner,
       dead: r.dead,
       door: [r.door.lv, Math.round(r.door.hp), r.door.max],
-      bed: [r.bed.lv, Math.round(r.bed.hp), r.bed.max],
-      cells: r.cells.map((c) => (c ? [c.type, c.lv] : 0)),
+      bed: [r.bed.lv],
+      // [类型, 等级, 耐久百分比（满的时候省略）]
+      cells: r.cells.map((c) => (c ? (c.hp < c.max ? [c.type, c.lv, Math.max(1, Math.round((c.hp / c.max) * 100))] : [c.type, c.lv]) : 0)),
       stun: r.stunUntil > this.t ? +(r.stunUntil - this.t).toFixed(1) : 0,
       ver: r.ver,
     };

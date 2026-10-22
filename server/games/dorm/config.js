@@ -19,8 +19,7 @@ const PLAYER = { speed: 4.2 };
 // cost[i]：从 i+1 级升到 i+2 级的花费
 const BED = {
   name: '床',
-  income: [3, 5, 8, 12, 18, 26, 37, 52, 72, 100], // 每秒金币
-  hp: [500, 700, 950, 1250, 1650, 2200, 2900, 3800, 5000, 6500],
+  income: [3, 5, 8, 12, 18, 26, 37, 52, 72, 100], // 每秒金币（床没有血量：猛鬼走到床边一下就能淘汰玩家）
   cost: [
     { g: 25 }, { g: 60 }, { g: 140 }, { g: 300 }, { g: 600, e: 20 },
     { g: 1150, e: 50 }, { g: 2200, e: 120 }, { g: 4000, e: 260 }, { g: 7000, e: 500 },
@@ -119,9 +118,9 @@ const BUILD = {
   },
   altar: {
     name: '香案',
-    desc: '持续修补床，并让床更结实',
-    heal: [5, 12, 26, 50],
-    bedHp: [0.1, 0.2, 0.35, 0.5],
+    desc: '持续修补屋里被砸坏的道具，并让道具更结实',
+    heal: [12, 28, 60, 120],
+    hpBoost: [0.15, 0.3, 0.5, 0.75],
     cost: [{ g: 60 }, { g: 200 }, { g: 550, e: 30 }, { g: 1400, e: 100 }],
   },
   trap: {
@@ -134,6 +133,15 @@ const BUILD = {
     cost: [{ g: 50 }, { g: 160 }, { g: 450, e: 20 }, { g: 1200, e: 80 }],
   },
 };
+// 道具的耐久：门破之后猛鬼要一路砸掉挡路的道具才能走到床边
+// 耐久 = ITEM_HP.base × ITEM_HP.grow^(等级-1) × 各道具的系数（香案还能再加成）
+const ITEM_HP = {
+  base: 420,
+  grow: 1.6,
+  mul: { turret: 1, thunder: 0.8, frost: 1.3, mirror: 1, repair: 0.8, generator: 1, sword: 1, talisman: 0.9, bell: 1, lantern: 0.7, cat: 0.8, altar: 1, trap: 1.6, chest: 0.5 },
+};
+const itemMaxHp = (type, lv, boost = 0) => Math.round(ITEM_HP.base * Math.pow(ITEM_HP.grow, lv - 1) * (ITEM_HP.mul[type] || 1) * (1 + boost));
+
 // 攻击类建筑（会射击猛鬼）
 const ATTACKERS = ['turret', 'thunder', 'sword', 'talisman', 'trap'];
 
@@ -181,7 +189,7 @@ const DIFFICULTY = {
   easy: { name: '简单', armorMul: 0.5, hpMul: 0.75, dmgMul: 0.7, levelEvery: 55, duration: 360, prep: 40, retreatAt: 0.4, healRate: 0.06, smart: 0, scream: 0, startGold: 40 },
   normal: { name: '普通', armorMul: 1, hpMul: 1, dmgMul: 1, levelEvery: 45, duration: 480, prep: 35, retreatAt: 0.35, healRate: 0.07, smart: 1, scream: 0, startGold: 30 },
   hard: { name: '困难', armorMul: 1.2, hpMul: 1.2, dmgMul: 1.2, levelEvery: 42, duration: 540, prep: 30, retreatAt: 0.3, healRate: 0.08, smart: 2, scream: 30, startGold: 30 },
-  nightmare: { name: '噩梦', armorMul: 1.6, hpMul: 1.4, dmgMul: 1.35, levelEvery: 37, duration: 570, prep: 28, retreatAt: 0.25, healRate: 0.1, smart: 3, scream: 22, startGold: 30 },
+  nightmare: { name: '噩梦', armorMul: 1.6, hpMul: 1.4, dmgMul: 1.3, levelEvery: 39, duration: 570, prep: 28, retreatAt: 0.25, healRate: 0.1, smart: 3, scream: 22, startGold: 30 },
 };
 const DIFF_KEYS = Object.keys(DIFFICULTY);
 
@@ -193,7 +201,7 @@ const BOT_LEVELS = {
 };
 
 function publicConfig() {
-  return { ROOMS, BED, DOOR, BUILD, BUILD_TYPES, ATTACKERS, SELL_RATE, DIFFICULTY, BOT_LEVELS, PLAYER, GHOST: { maxLv: GHOST.maxLv } };
+  return { ROOMS, BED, DOOR, BUILD, BUILD_TYPES, ATTACKERS, ITEM_HP, SELL_RATE, DIFFICULTY, BOT_LEVELS, PLAYER, GHOST: { maxLv: GHOST.maxLv } };
 }
 
-module.exports = { ROOMS, MAPGEN, PLAYER, BED, DOOR, BUILD, BUILD_TYPES, ATTACKERS, PROPS, SELL_RATE, GHOST, DIFFICULTY, DIFF_KEYS, BOT_LEVELS, publicConfig };
+module.exports = { ROOMS, MAPGEN, PLAYER, BED, DOOR, BUILD, BUILD_TYPES, ATTACKERS, ITEM_HP, itemMaxHp, PROPS, SELL_RATE, GHOST, DIFFICULTY, DIFF_KEYS, BOT_LEVELS, publicConfig };
