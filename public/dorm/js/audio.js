@@ -218,7 +218,7 @@ class HorrorAudio {
     if (!this.ctx || this.ctx.state !== 'running') return;
     const t0 = this.now();
     // 同类音效限流，避免几十个弩同时开火时糊成一片
-    const gap = { shot: 0.045, hitDoor: 0.08, hitBed: 0.12, thunder: 0.15, build: 0.06 }[name] || 0.02;
+    const gap = { shot: 0.045, slash: 0.06, fire: 0.1, snap: 0.1, hitDoor: 0.08, hitBed: 0.12, thunder: 0.15, build: 0.06, step: 0.15 }[name] || 0.02;
     if (this.last[name] && t0 - this.last[name] < gap) return;
     this.last[name] = t0;
     const k = opts.near === undefined ? 1 : 0.25 + 0.75 * opts.near;
@@ -343,6 +343,35 @@ class HorrorAudio {
       case 'invite':
         this.bell(t, 659.25, 0.08, 1.5);
         this.bell(t + 0.15, 987.77, 0.08, 1.5);
+        break;
+      case 'step':
+        this.noise(t, 0.05, { gain: 0.06, type: 'bandpass', freq: 700, q: 2 });
+        this.noise(t + 0.18, 0.05, { gain: 0.05, type: 'bandpass', freq: 600, q: 2 });
+        break;
+      case 'coins':
+        for (let i = 0; i < 7; i++) this.osc('sine', 1800 + Math.random() * 1400, t + i * 0.05 + Math.random() * 0.02, 0.12, { gain: 0.05, rev: 0.3 });
+        this.noise(t, 0.3, { gain: 0.05, type: 'highpass', freq: 4000 });
+        break;
+      case 'bellring':
+        [880, 1318.5, 2093].forEach((f, i) => this.bell(t + i * 0.01, f, 0.07 * k, 2.2, 0.8));
+        this.bell(t + 0.25, 880, 0.04 * k, 1.8, 0.8);
+        break;
+      case 'slash': {
+        const { o } = this.osc('sawtooth', 2400, t, 0.1, { gain: 0.04 * k });
+        o.frequency.exponentialRampToValueAtTime(600, t + 0.1);
+        this.noise(t, 0.12, { gain: 0.1 * k, type: 'bandpass', freq: 3500, sweepTo: 1200, q: 3 });
+        this.osc('triangle', 1600, t + 0.02, 0.05, { gain: 0.03 * k });
+        break;
+      }
+      case 'fire':
+        this.noise(t, 0.35, { gain: 0.14 * k, type: 'lowpass', freq: 900, sweepTo: 300, q: 0.7 });
+        this.noise(t, 0.12, { gain: 0.08 * k, type: 'highpass', freq: 2500 });
+        break;
+      case 'snap':
+        this.osc('square', 220, t, 0.04, { gain: 0.15 * k });
+        this.noise(t, 0.08, { gain: 0.3 * k, type: 'bandpass', freq: 1800, q: 1.5 });
+        this.thud(t + 0.02, 90, 0.35 * k, 0.2);
+        this.osc('square', 3000, t + 0.04, 0.02, { gain: 0.05 * k });
         break;
       case 'creak': {
         const { o } = this.osc('sawtooth', 90 + Math.random() * 60, t, 1.2, { gain: 0.03 * k, a: 0.3, rev: 0.8 });

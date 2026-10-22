@@ -5,7 +5,7 @@
 const assert = require('assert');
 const { DormGame } = require('../server/games/dorm/sim');
 const { botAction } = require('../server/games/dorm/bot');
-const { DIFF_KEYS, BOT_LEVELS, CELLS, GEOM } = require('../server/games/dorm/config');
+const { DIFF_KEYS, BOT_LEVELS } = require('../server/games/dorm/config');
 
 function play(diff, levels, seed = 1) {
   // 可复现的随机数
@@ -40,9 +40,15 @@ function play(diff, levels, seed = 1) {
     assert.strictEqual(new Set(owners).size, owners.length, '一人只能占一间宿舍');
     for (const r of g.rooms) {
       assert.ok(r.door.hp >= 0 && r.door.hp <= r.door.max + 1e-6);
-      for (const idx of GEOM[r.i].bedCells) assert.strictEqual(r.cells[idx], null, '床上不能建造');
-      assert.strictEqual(r.cells.length, CELLS);
+      assert.ok(r.bed.hp >= 0 && r.bed.hp <= r.bed.max + 1e-6);
+      assert.strictEqual(r.cells.length, g.geo[r.i].cells.length);
     }
+    // 走路的人不会穿墙，躺下的人在自己的床上
+    for (const p of g.players) {
+      if (p.state === 'bed') assert.ok(g.geo[p.room].bed.tiles.some(([x, y]) => Math.abs(p.x - x - 0.5) <= 1 && Math.abs(p.y - y - 0.5) <= 1));
+      else assert.ok('.LErD'.includes(g.tile(Math.floor(p.x), Math.floor(p.y))), `玩家站在 ${g.tile(Math.floor(p.x), Math.floor(p.y))} 上`);
+    }
+    if (g.phase === 'play' && !['retreat', 'heal'].includes(g.ghost.state)) assert.ok('.LErDE'.includes(g.tile(Math.floor(g.ghost.x), Math.floor(g.ghost.y))), '猛鬼不能穿墙');
     assert.ok(g.ghost.hp >= 0 && g.ghost.hp <= g.ghost.max + 1e-6);
   }
   assert.strictEqual(g.phase, 'ended', '对局应在时限内结束');

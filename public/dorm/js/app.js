@@ -2,7 +2,6 @@
 import { getSession, takeHashSession, api, upgradeToHttps, goToLogin, wsUrl } from '/js/session.js';
 import { sound } from './audio.js';
 import { Stage } from './render.js';
-import { GEOM, BUILD_TYPES, ROOMS } from './geom.js';
 import { iconCanvas } from './sprites.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -45,6 +44,8 @@ const S = {
 window.__S = S;
 
 let stage = null;
+const BT = () => S.cfg.BUILD_TYPES;
+const GEO = (i) => S.map.rooms[i];
 
 // ======================= 网络 =======================
 function connect() {
@@ -163,6 +164,7 @@ function onRoom(d) {
   if (d.room.gameId !== prevGame) {
     S.gameId = d.room.gameId;
     S.game = null;
+    S.map = null;
     S.rooms = [];
     S.sel = null;
     S.endShownFor = null;
@@ -282,6 +284,7 @@ function showGame() {
     stage.onTap = onTap;
     window.__stage = stage;
   }
+  if (S.map && stage.map !== S.map) stage.setMap(S.map);
   stage.start();
   stage.resize();
   updateInsets();
@@ -323,6 +326,8 @@ function onState(d) {
     S.gameId = d.gameId;
     S.rooms = [];
   }
+  if (d.map) S.map = d.map;
+  if (!S.map) return;
   for (const r of d.rooms) {
     if (r.cells) S.rooms[r.i] = r;
     else if (S.rooms[r.i]) Object.assign(S.rooms[r.i], r);
@@ -330,6 +335,7 @@ function onState(d) {
   const prev = S.game;
   S.game = d;
   if (document.body.dataset.screen !== 'game') return;
+  if (stage.map !== S.map) stage.setMap(S.map);
   const pm = playersMap();
   stage.setState(d, S.rooms, pm, S.you);
   const now = performance.now() / 1000;
@@ -357,14 +363,14 @@ function near(roomIdx) {
   const mr = me();
   if (!mr || mr.room === null) return 0.6;
   if (roomIdx === mr.room) return 1;
-  const a = GEOM[mr.room].center;
-  const b = GEOM[roomIdx].center;
+  const a = GEO(mr.room).center;
+  const b = GEO(roomIdx).center;
   return Math.max(0, 1 - Math.hypot(a.x - b.x, a.y - b.y) / 14);
 }
 function ghostNear() {
   const mr = me();
   if (!mr || mr.room === null || !S.game) return 0.6;
-  const a = GEOM[mr.room].center;
+  const a = GEO(mr.room).center;
   return Math.max(0, 1 - Math.hypot(a.x - S.game.ghost.x, a.y - S.game.ghost.y) / 14);
 }
 
@@ -386,14 +392,35 @@ function onEvent(e, pm) {
   const isMe = (pid) => pid === S.you;
   switch (e.type) {
     case 'start':
-      banner('熄灯了', '快选一间宿舍躺下', true);
+      banner('熄灯了', '从入口走进一间空宿舍，躺到床上', true);
       sound.play('claim');
       break;
     case 'claim':
       if (isMe(e.pid)) {
         sound.play('claim');
-        if (e.auto) toast(`你被分到了 ${e.room + 1} 号宿舍`);
+        stage.marker = null;
+        if (e.auto) toast(`你吓得钻进了最近的 ${e.room + 1} 号宿舍`);
+        else toast(`你在 ${e.room + 1} 号宿舍躺下了`);
       }
+      break;
+    case 'claimFail':
+      if (isMe(e.pid)) {
+        toast(`${e.room + 1} 号宿舍被别人抢先躺下了`, true);
+        sound.play('error');
+        stage.marker = null;
+      }
+      break;
+    case 'bump':
+      if (isMe(e.pid)) toast(`${e.room + 1} 号宿舍有人躺下了，你被请了出来`, true);
+      break;
+    case 'loot':
+      if (isMe(e.pid)) {
+        sound.play('coins');
+        toast(e.e ? `储物柜里翻出一块电池：+${e.e} 电` : `储物柜里翻出 ${e.g} 金币`);
+      }
+      break;
+    case 'bell':
+      sound.play('bellring', { near: near(e.room) });
       break;
     case 'wake':
       banner('猛鬼醒了', '锁好门，别出声', true);
@@ -407,7 +434,7 @@ function onEvent(e, pm) {
       }
       break;
     case 'shot':
-      sound.play(e.kind === 'thunder' ? 'thunder' : 'shot', { near: ghostNear() });
+      sound.play({ thunder: 'thunder', sword: 'slash', talisman: 'fire', trap: 'snap' }[e.kind] || 'shot', { near: ghostNear() });
       break;
     case 'hitDoor':
       sound.play('hitDoor', { near: near(e.room) });
@@ -492,9 +519,10 @@ function renderHud() {
     flee: '退散了',
     feast: '……',
   }[gh.state];
-  $('#g-stat').textContent = `${st} · 每击 ${gh.dmg} · 护甲 ${gh.armor}${gh.slow ? ` · 减速 ${Math.round(gh.slow * 100)}%` : ''}`;
+  const extra = [gh.stun ? '被定住' : '', gh.root ? '被夹住' : '', gh.burn ? '灼烧中' : '', gh.slow ? `减速 ${Math.round(gh.slow * 100)}%` : ''].filter(Boolean).join(' · ');
+  $('#g-stat').textContent = `${st} · 每击 ${gh.dmg} · 护甲 ${gh.armor}${extra ? ' · ' + extra : ''}`;
   const p = me();
-  $('#hud-res').hidden = !p || p.room === null;
+  $('#hud-res').hidden = !p;
   if (p) {
     $('#r-gold').textContent = fmtN(p.gold);
     $('#r-inc').textContent = `+${p.income}/秒`;
@@ -510,8 +538,8 @@ function renderHud() {
   if (targeted) ten = 0.45;
   if (attacking) ten = 0.55 + (1 - mr.door[1] / mr.door[2]) * 0.35 + (gh.state === 'bed' ? 0.3 : 0);
   sound.setTension(ten);
-  $('#btn-focus').hidden = !p || p.room === null;
-  $('#btn-focus').textContent = stage && stage.focusMode === 'room' ? '全图' : '我的宿舍';
+  $('#btn-focus').hidden = !p;
+  $('#btn-focus').textContent = stage && stage.focusMode !== 'all' ? '全图' : p && p.st === 'bed' ? '我的宿舍' : '跟着我';
 }
 
 function costHTML(c, p) {
@@ -548,9 +576,9 @@ function renderDock() {
   } else if (g.phase === 'ended') {
     key = 'end';
     html = '';
-  } else if (!p || p.room === null) {
+  } else if (!p || p.st !== 'bed') {
     key = `claim${Math.ceil(g.prepLeft)}`;
-    html = `<div class="dock-hint">点一间空宿舍躺下 · ${Math.ceil(g.prepLeft)} 秒后熄灯</div>`;
+    html = `<div class="dock-hint">点地面走动，点一张<b>空床</b>躺下占房 · ${Math.ceil(g.prepLeft)} 秒后熄灯</div>`;
   } else if (!p.alive || !r || r.dead) {
     key = 'dead';
     html = '<div class="dock-hint">你已经出局了，帮队友看着点……</div>';
@@ -584,14 +612,25 @@ function onTap(hit) {
   const g = S.game;
   if (!g || !S.you || g.phase === 'ended') return;
   const p = me();
-  if (!hit) return closeSheet();
-  const r = S.rooms[hit.room];
   if (!p || !p.alive) return;
-  if (p.room === null || (g.phase === 'prep' && hit.room !== p.room && r && !r.owner && !hasBuilt())) {
+  if (!hit) return closeSheet();
+  const r = hit.room !== null && hit.room >= 0 ? S.rooms[hit.room] : null;
+  // 还没躺下：走路，点床就去躺
+  if (p.st !== 'bed') {
     if (g.phase !== 'prep') return;
-    if (r && r.owner) return toast('这间已经有人了', true);
-    sound.play('click');
-    send('act', { type: 'claim', room: hit.room });
+    if (r && r.owner && hit.room !== p.room) {
+      const o = playersMap().get(r.owner);
+      return toast(`${hit.room + 1} 号宿舍已经是 ${o ? o.name : '别人'} 的了`, true);
+    }
+    if (hit.kind === 'furniture') return toast('那里摆着家具');
+    let tx = hit.x;
+    let ty = hit.y;
+    if (hit.kind === 'bed') {
+      [tx, ty] = GEO(hit.room).bed.head;
+      sound.play('click');
+    } else sound.play('step');
+    stage.marker = { x: tx, y: ty, t0: performance.now() / 1000 };
+    send('act', { type: 'move', x: tx, y: ty });
     return;
   }
   if (hit.room !== p.room) {
@@ -600,8 +639,9 @@ function onTap(hit) {
     if (o) toast(`${hit.room + 1} 号房：${o.name}`);
     return;
   }
-  if (hit.cell === null || GEOM[hit.room].bedCells.includes(hit.cell)) {
+  if (hit.kind !== 'cell') {
     closeSheet();
+    if (hit.kind === 'bed') toast('床：在下面升级，收入更高');
     return;
   }
   sound.play('click');
@@ -609,17 +649,11 @@ function onTap(hit) {
   stage.selected = S.sel;
   S.sheetKey = '';
   renderSheet();
-  // 手机上面板在底部：把选中的格子挪到面板上方
   const sh = $('#sheet');
   if (!sh.hidden && window.innerWidth < 980) {
-    const c = GEOM[hit.room].cellCenter(hit.cell);
+    const c = GEO(hit.room).cellC ? GEO(hit.room).cellC[hit.cell] : { x: GEO(hit.room).cells[hit.cell][0] + 0.5, y: GEO(hit.room).cells[hit.cell][1] + 0.5 };
     stage.ensureVisible(c.x, c.y, sh.getBoundingClientRect().top);
   }
-}
-
-function hasBuilt() {
-  const r = myRoom();
-  return r && (r.cells.some(Boolean) || r.bed[0] > 1 || r.door[0] > 1);
 }
 
 function closeSheet() {
@@ -640,7 +674,20 @@ function statLine(type, lv) {
   switch (type) {
     case 'turret':
     case 'thunder':
+    case 'sword':
       return `伤害 ${b.dmg[i]}${nx(b.dmg)} · 每 ${b.cd} 秒一发 · 射程 ${b.range}`;
+    case 'talisman':
+      return `伤害 ${b.dmg[i]}${nx(b.dmg)} · 灼烧每秒 ${b.burn[i]}${nx(b.burn)}（${b.burnTime} 秒，无视护甲）· 射程 ${b.range}`;
+    case 'trap':
+      return `夹一下 ${b.dmg[i]}${nx(b.dmg)} · 定住 ${b.root} 秒 · 每 ${b.cd} 秒 · 范围 ${b.range}`;
+    case 'bell':
+      return `定身 ${b.stun[i]}${nx(b.stun)} 秒 · 每 ${b.cd[i]} 秒摇一次 · 范围 ${b.range}`;
+    case 'lantern':
+      return `相邻攻击建筑伤害 +${pct(b.boost[i])}${nx(b.boost, pct)}`;
+    case 'cat':
+      return `每秒 +${b.gold[i]}${nx(b.gold)} 金币`;
+    case 'altar':
+      return `每秒修床 ${b.heal[i]}${nx(b.heal)} · 床血量 +${pct(b.bedHp[i])}${nx(b.bedHp, pct)}`;
     case 'frost':
       return `减速 ${pct(b.slow[i])}${nx(b.slow, pct)} · 范围 ${b.range}`;
     case 'mirror':
@@ -663,10 +710,13 @@ function renderSheet() {
   const el = $('#sheet');
   let key;
   if (!cell) {
-    key = 'b' + BUILD_TYPES.map((t) => +afford(cfg.BUILD[t].cost[0], p)).join('');
+    key = 'b' + BT().map((t) => +afford(cfg.BUILD[t].cost[0], p)).join('');
+    stage.preview = null;
+  } else if (cell[0] === 'chest') {
+    key = 'chest';
     stage.preview = null;
   } else {
-    const type = BUILD_TYPES[cell[0]];
+    const type = cell[0];
     const c = cfg.BUILD[type].cost[cell[1]];
     key = `d${type}${cell[1]}${afford(c, p)}`;
     stage.preview = type;
@@ -677,13 +727,17 @@ function renderSheet() {
   el.hidden = false;
   if (!cell) {
     el.innerHTML = `<div class="sheet-head"><b>在这一格建造</b><button class="x" data-close aria-label="关闭">✕</button></div>
-      <div class="builds">${BUILD_TYPES.map((t) => {
+      <div class="builds">${BT().map((t) => {
         const b = cfg.BUILD[t];
         const c = b.cost[0];
-        return `<button class="bcard" data-build="${t}" ${afford(c, p) ? '' : 'disabled'}><span data-icon="${t}"></span><b>${b.name}</b><small>${b.desc}</small><span class="cost">${costHTML(c, p)}</span></button>`;
+        return `<button class="bcard" data-build="${t}" title="${esc(b.desc)}" ${afford(c, p) ? '' : 'disabled'}><span data-icon="${t}"></span><b>${b.name}</b><small>${b.desc}</small><span class="cost">${costHTML(c, p)}</span></button>`;
       }).join('')}</div>`;
+  } else if (cell[0] === 'chest') {
+    el.innerHTML = `<div class="sheet-head"><b>旧储物柜</b><button class="x" data-close aria-label="关闭">✕</button></div>
+      <div class="detail"><span data-icon="chest" data-size="56"></span><div class="info">上一个住在这里的人留下的柜子，门缝里透着光。<br>翻一翻，也许有金币或电池。</div></div>
+      <div class="detail-actions"><button class="btn fu" data-open>搜一搜</button></div>`;
   } else {
-    const type = BUILD_TYPES[cell[0]];
+    const type = cell[0];
     const b = cfg.BUILD[type];
     const lv = cell[1];
     const c = b.cost[lv];
@@ -708,6 +762,12 @@ function renderSheet() {
       S.sheetKey = '';
     })
   );
+  const op = $('[data-open]', el);
+  if (op)
+    op.addEventListener('click', () => {
+      send('act', { type: 'open', cell: sel.cell });
+      closeSheet();
+    });
   const up = $('[data-upgrade]', el);
   if (up) up.addEventListener('click', () => send('act', { type: 'upgrade', cell: sel.cell }));
   const sell = $('[data-sell]', el);
@@ -939,7 +999,9 @@ $('[data-close-drawer]').addEventListener('click', () => ($('#drawer').hidden = 
 $('#btn-focus').addEventListener('click', () => {
   if (!stage) return;
   stage.userFocused = true;
-  stage.setFocus(stage.focusMode === 'room' ? 'all' : 'room');
+  stage.manual = false;
+  const p = me();
+  stage.setFocus(stage.focusMode !== 'all' ? 'all' : p && p.st === 'bed' ? 'room' : 'me');
   renderHud();
 });
 
@@ -948,6 +1010,7 @@ window.addEventListener('keydown', (e) => {
   if (e.target.closest('input')) return;
   if (document.body.dataset.screen !== 'game' || !S.game) return;
   const k = e.key.toLowerCase();
+  if (k === 'd' && me() && me().st !== 'bed') return walkKey('x');
   if (k === 'escape') {
     closeSheet();
     closeModal();
@@ -956,8 +1019,21 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'd') send('act', { type: 'door' });
   else if (k === 'f') $('#btn-focus').click();
   else if (k === 'u' && S.sel) send('act', { type: 'upgrade', cell: S.sel.cell });
-  else if (/^[1-6]$/.test(k) && S.sel) send('act', { type: 'build', cell: S.sel.cell, btype: BUILD_TYPES[Number(k) - 1] });
+  else if (/^[1-9]$/.test(k) && S.sel) send('act', { type: 'build', cell: S.sel.cell, btype: BT()[Number(k) - 1] });
+  else if (['w', 'a', 's', 'x', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) walkKey(k);
 });
+
+// 键盘走路（准备阶段）：每按一下 / 按住时朝那个方向走一格
+let walkTimer = 0;
+function walkKey(k) {
+  const p = me();
+  if (!p || p.st === 'bed' || S.game.phase !== 'prep' || Date.now() - walkTimer < 140) return;
+  walkTimer = Date.now();
+  const [dx, dy] = { w: [0, -1], arrowup: [0, -1], s: [0, 1], arrowdown: [0, 1], a: [-1, 0], arrowleft: [-1, 0], x: [1, 0], arrowright: [1, 0] }[k];
+  // 竖屏时地图是转置的
+  const [wx, wy] = stage && stage.T ? [dy, dx] : [dx, dy];
+  send('act', { type: 'move', x: Math.floor(p.x) + wx, y: Math.floor(p.y) + wy });
+}
 
 // 首次触碰时解锁声音
 window.addEventListener('pointerdown', () => sound.unlock(), { once: false, passive: true });
@@ -975,6 +1051,5 @@ document.addEventListener('visibilitychange', () => {
     toast('暂时连不上服务器，请稍后刷新', true);
     return;
   }
-  void ROOMS;
   connect();
 })();

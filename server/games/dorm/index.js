@@ -112,12 +112,14 @@ module.exports = function createDorm(platform) {
   // 对局状态：宿舍里的建筑只在有变化时下发，其余每次都发（数据量很小）
   function sendState(room, conn, events) {
     const g = room.game;
+    const v = g.view();
+    v.gameId = room.gameId;
+    // 地图每局随机：第一次（或重连后）把整张地图带上
     if (!conn.roomVers || conn.roomVersFor !== room.gameId) {
       conn.roomVers = new Array(ROOMS).fill(-1);
       conn.roomVersFor = room.gameId;
+      v.map = g.map;
     }
-    const v = g.view();
-    v.gameId = room.gameId;
     v.rooms = g.rooms.map((r) => {
       if (conn.roomVers[r.i] === r.ver) return { i: r.i, door: [r.door.lv, Math.round(r.door.hp), r.door.max], bed: [r.bed.lv, Math.round(r.bed.hp), r.bed.max], stun: r.stunUntil > g.t ? 1 : 0 };
       conn.roomVers[r.i] = r.ver;
@@ -158,7 +160,7 @@ module.exports = function createDorm(platform) {
       if (p.think > 0) continue;
       p.think = (BOT_LEVELS[level] || BOT_LEVELS.normal).think * (0.8 + Math.random() * 0.4);
       // 选宿舍时稍等一下，看起来更像真人
-      if (gp.room === null && g.t < 2 + Math.random() * 3) continue;
+      if (gp.state !== 'bed' && g.t < 1.5 + Math.random() * 2.5) continue;
       const focus = p.botLevel === 'ai' && !p.autoBot && p.aiPlan ? p.aiPlan.weights : {};
       for (let k = 0; k < 3; k++) {
         const a = botAction(g, p.id, level, focus);

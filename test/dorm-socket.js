@@ -31,7 +31,7 @@ async function http(method, url, body, token) {
 }
 function client(name, p = '/dorm/ws') {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}${p}`);
-  const c = { ws, name, room: null, you: null, state: null, msgs: [], waiters: [] };
+  const c = { ws, name, room: null, you: null, state: null, map: null, events: [], msgs: [], waiters: [] };
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.t === 'room') {
@@ -43,6 +43,8 @@ function client(name, p = '/dorm/ws') {
       if (!c.state || c.state.gameId !== m.d.gameId) c.rooms = [];
       for (const r of m.d.rooms) c.rooms[r.i] = r.cells ? r : { ...c.rooms[r.i], ...r };
       c.state = m.d;
+      if (m.d.map) c.map = m.d.map;
+      c.events.push(...(m.d.events || []));
     }
     if (m.t !== 'state') c.msgs.push(m);
     c.waiters = c.waiters.filter((w) => !(w.pred(m) && (w.res(m), true)));
@@ -67,6 +69,25 @@ async function login(name, session, p) {
   return c;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const meOf = (c) => c.state.players.find((p) => p.id === c.you);
+// 依次尝试走向各间宿舍的床，直到躺下（电脑可能抢先）
+async function claimAny(c, order = [0, 4, 1, 5, 2, 6, 3, 7]) {
+  for (const i of order) {
+    if (c.rooms[i] && c.rooms[i].owner) continue;
+    c.events = [];
+    c.send('act', { type: 'claim', room: i });
+    for (let k = 0; k < 100; k++) {
+      await sleep(100);
+      if (meOf(c).st === 'bed') return meOf(c).room;
+      if (c.events.some((e) => e.type === 'claimFail' && e.pid === c.you)) break;
+      if (c.msgs.some((m) => m.t === 'error' && /有人/.test(m.d.msg))) {
+        c.msgs = c.msgs.filter((m) => m.t !== 'error');
+        break;
+      }
+    }
+  }
+  throw new Error(c.name + ' 没能躺下');
+}
 
 (async () => {
   try {
@@ -124,27 +145,42 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await a.wait((m) => m.t === 'room' && a.room.started);
     await sleep(300);
     assert.strictEqual(a.state.phase, 'prep');
-    a.send('act', { type: 'claim', room: 3 });
-    b.send('act', { type: 'claim', room: 3 });
+    assert.ok(a.map && a.map.rooms.length === 8 && a.map.tiles.length === a.map.H, '应下发随机地图');
+    // 开局都在入口
+    for (const p of a.state.players) assert.strictEqual(a.map.tiles[Math.floor(p.y)][Math.floor(p.x)], 'E', '开局在宿舍楼入口');
+    // 走不进墙
+    a.send('act', { type: 'move', x: 0, y: 0 });
+    await a.wait((m) => m.t === 'error' && /走不过去/.test(m.d.msg));
+    const ra = await claimAny(a);
+    assert.strictEqual(a.rooms[ra].owner, a.you);
+    // 别人不能再进这间
+    const [hx, hy] = a.map.rooms[ra].bed.head;
+    b.send('act', { type: 'move', x: hx, y: hy });
     await b.wait((m) => m.t === 'error' && /有人/.test(m.d.msg));
-    b.send('act', { type: 'claim', room: 7 });
-    await sleep(400);
-    const meA = a.state.players.find((p) => p.id === a.you);
-    assert.strictEqual(meA.room, 3);
-    a.send('act', { type: 'build', cell: 17, btype: 'turret' });
-    a.send('act', { type: 'build', cell: 0, btype: 'turret' });
+    const rb = await claimAny(b, [7, 3, 6, 2, 5, 1, 4, 0]);
+    assert.notStrictEqual(ra, rb);
+    a.send('act', { type: 'move', x: hx, y: hy + 1 });
+    await a.wait((m) => m.t === 'error' && /躺下/.test(m.d.msg));
+    // 搜初始的储物柜、建造
+    const chest = a.rooms[ra].cells.findIndex((c) => c && c[0] === 'chest');
+    if (chest >= 0) {
+      const before = meOf(a).gold + meOf(a).energy;
+      a.send('act', { type: 'open', cell: chest });
+      await sleep(300);
+      assert.ok(meOf(a).gold + meOf(a).energy > before, '搜储物柜应得到东西');
+      assert.strictEqual(a.rooms[ra].cells[chest], 0);
+    }
+    const empty = a.rooms[ra].cells.findIndex((c) => !c);
+    a.send('act', { type: 'build', cell: empty, btype: 'turret' });
+    a.send('act', { type: 'build', cell: 999, btype: 'turret' });
     await a.wait((m) => m.t === 'error' && /不能建造/.test(m.d.msg));
     await sleep(400);
-    const r3 = a.rooms[3];
-    assert.ok(r3.cells && r3.cells[17] && r3.cells[17][1] === 1, '应建好桃木弩');
-    a.send('act', { type: 'claim', room: 2 });
-    await a.wait((m) => m.t === 'error' && /布置过/.test(m.d.msg));
-    // 攒够 25 金再升床
-    for (let i = 0; i < 40 && a.state.players.find((p) => p.id === a.you).gold < 25; i++) await sleep(100);
+    assert.deepStrictEqual(a.rooms[ra].cells[empty], ['turret', 1], '应建好桃木弩');
+    for (let i = 0; i < 60 && meOf(a).gold < 25; i++) await sleep(100);
     a.send('act', { type: 'bed' });
     await sleep(300);
-    assert.strictEqual(a.rooms[3].bed[0], 2, '床应升到 2 级');
-    console.log('✓ 选宿舍（不能抢）、建造（床位不能建）、布置后不能换房、升级床');
+    assert.strictEqual(a.rooms[ra].bed[0], 2, '床应升到 2 级');
+    console.log('✓ 随机地图、入口集合、走到床上占房（一间一人）、搜储物柜、建造、升级床');
 
     // ---------- 掉线代管、回来恢复 ----------
     b.ws.close();
@@ -172,6 +208,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await a2.wait((m) => m.t === 'room' && a2.room.started);
     await sleep(200);
     a2.send('act', { type: 'claim', room: 4 });
+    // 来不及走到的也会在猛鬼醒来时被塞进空宿舍
     const end = await a2.wait((m) => m.t === 'room' && a2.room.ended, 30000);
     assert.ok(end);
     assert.ok(a2.state.phase === 'ended' && a2.state.result, '应有结算结果');
