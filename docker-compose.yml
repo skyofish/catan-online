@@ -32,6 +32,8 @@ services:
       - AFK_TAKEOVER_MS=60000
       # 最多同时存在的房间数
       - MAX_ROOMS=200
+      # 猛鬼宿舍：真人掉线多久后由电脑代管（毫秒）
+      - DORM_AFK_MS=15000
     volumes:
       # 数据库（账号、战绩、进行中的对局）保存在这个数据卷里，重建容器不会丢失
       - catan-data:/app/data

@@ -486,6 +486,8 @@ module.exports = function createCatan(platform) {
           if (st === 'playing' || status === 'idle') status = st;
         }
         const cool = room && room.invited && room.invited.get(uid);
+        // 平台汇总各游戏的状态（在别的游戏里对局也算「对局中」）
+        if (platform.presence) status = platform.presence(uid);
         out.push({ id: uid, username, status, invited: !!(cool && Date.now() - cool < 30000) });
       }
       const order = { idle: 0, room: 1, playing: 2 };
@@ -508,7 +510,7 @@ module.exports = function createCatan(platform) {
       room.invited.set(uid, Date.now());
       const msg = {
         t: 'invite',
-        d: { id: rid(4), from: me.name, fromUser: conn.user.id, code: room.code, title: room.title, size: room.size, players: room.players.length, max: LAYOUTS[room.size].maxPlayers },
+        d: { id: rid(4), game: 'catan', gameName: '卡坦岛', path: '/catan/', from: me.name, fromUser: conn.user.id, code: room.code, title: room.title, size: room.size, detail: `${room.size} 人地图`, players: room.players.length, max: LAYOUTS[room.size].maxPlayers },
       };
       for (const c of targets) c.send(msg);
       const name = [...targets][0].user.username;
@@ -520,7 +522,7 @@ module.exports = function createCatan(platform) {
       if (d.accept) return;
       const set = userConns.get(Number(d.fromUser));
       if (!set) return;
-      for (const c of set) if (c.room === String(d.code || '')) c.send({ t: 'toast', d: { msg: `${conn.user.username} 暂时不能加入` } });
+      for (const c of set) if (c.room === String(d.code || '') && c.game && c.game.id === 'catan') c.send({ t: 'toast', d: { msg: `${conn.user.username} 暂时不能加入` } });
     },
 
     list(conn) {
@@ -824,6 +826,18 @@ module.exports = function createCatan(platform) {
     conn.voiceUid = conn.voiceUid || crypto.randomInt(1, 2 ** 31 - 1);
   }
 
+  // 该玩家在卡坦岛中的状态：playing 对局中 / room 在房间里 / null
+  function presence(userId) {
+    let st = null;
+    for (const r of rooms.values()) {
+      const pl = r.players.find((p) => p.userId === userId && p.conns.size);
+      if (!pl) continue;
+      if (r.game && r.game.phase !== 'ended') return 'playing';
+      st = 'room';
+    }
+    return st;
+  }
+
   // 平台大厅上显示的概况
   function summary(userId) {
     let open = 0;
@@ -873,6 +887,7 @@ module.exports = function createCatan(platform) {
     onClose,
     kickUser,
     summary,
+    presence,
     shutdown,
     rateKey: (t) => (t === 'rtc' ? 'rtc' : null),
     aiStats: () => ai.publicStats(),

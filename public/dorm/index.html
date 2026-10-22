@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>猛鬼宿舍 - {{PLATFORM_NAME}}</title>
+<meta name="description" content="猛鬼宿舍：熄灯后躺平发育、造塔守门，和朋友一起活到天亮。">
+<meta name="theme-color" content="#07060a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/dorm/css/style.css">
+</head>
+<body data-screen="loading">
+
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ============ 首页 ============ -->
+<section id="screen-home" class="screen" hidden>
+  <div class="home-bg" aria-hidden="true">
+    <div class="corridor"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="eyes"><b></b><b></b></div>
+  </div>
+  <header class="home-head">
+    <a class="back-link" href="/">← 游戏大厅</a>
+    <span class="me" id="me-name"></span>
+  </header>
+  <div class="home-main">
+    <h1 class="title" data-text="猛鬼宿舍">猛鬼宿舍</h1>
+    <p class="subtitle">熄灯之后，别出声。<br>躺在床上发育，守住那扇门，活到天亮。</p>
+
+    <div class="home-card">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="rooms" role="tab">宿舍楼</button>
+        <button class="tab" data-tab="me" role="tab">我的战绩</button>
+        <button class="tab" data-tab="board" role="tab">排行榜</button>
+        <button class="tab" data-tab="help" role="tab">怎么玩</button>
+      </div>
+
+      <div class="tab-pane" data-pane="rooms">
+        <div class="create">
+          <div class="diff-pick" id="create-diff"></div>
+          <div class="row">
+            <input id="create-title" maxlength="20" placeholder="房间名（可不填）" aria-label="房间名">
+            <label class="check"><input type="checkbox" id="create-private"> 私密</label>
+          </div>
+          <div class="row">
+            <button class="btn fu" id="btn-create">开一栋宿舍楼</button>
+            <form class="join-form" id="join-form">
+              <input id="join-code" maxlength="5" placeholder="房间号" aria-label="房间号" autocapitalize="characters">
+              <button class="btn dark" type="submit">进入</button>
+            </form>
+          </div>
+        </div>
+        <ul class="room-list" id="room-list"></ul>
+      </div>
+
+      <div class="tab-pane" data-pane="me" hidden><div id="me-stats" class="stats"></div></div>
+      <div class="tab-pane" data-pane="board" hidden><div id="leaderboard" class="stats"></div></div>
+      <div class="tab-pane help" data-pane="help" hidden>
+        <ol>
+          <li><b>选宿舍</b>：开局有一小段时间，点一间空宿舍躺下。躺下后每秒都有金币进账。</li>
+          <li><b>躺平发育</b>：升级<em>床</em>，收入越来越高。高级升级需要<em>电力</em>，造发电机产电。</li>
+          <li><b>守门</b>：猛鬼醒来后会挑一间宿舍砸门。升级<em>门</em>加血，符水台持续修门。门破了猛鬼会冲进来攻击床，床毁即出局。</li>
+          <li><b>反击</b>：在宿舍格子里造桃木弩、天雷符、寒冰棺、照妖镜。靠近门的防御能打到门外的猛鬼，隔壁和对面宿舍的防御也能互相支援。</li>
+          <li><b>猛鬼会成长</b>：每隔一段时间升一级，伤害和护甲越来越高，血少了会回血池恢复。低级的弩打不动高级的猛鬼，记得升级。</li>
+          <li><b>胜利</b>：坚持到天亮（倒计时结束），或者直接打死猛鬼。</li>
+        </ol>
+        <p class="muted">难度越高，猛鬼越聪明：会挑最脆弱的宿舍、打不动就换人，困难以上还会「鬼哭」让一间宿舍的防御停摆 3 秒。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 房间 ============ -->
+<section id="screen-lobby" class="screen" hidden>
+  <header class="bar">
+    <button class="btn ghost small" id="btn-leave-lobby">← 离开</button>
+    <div class="bar-title"><b id="lobby-title"></b><span class="code" id="lobby-code" title="点击复制邀请链接"></span></div>
+    <button class="icon-btn" id="btn-sound-lobby" aria-label="声音">♪</button>
+  </header>
+  <div class="lobby-body">
+    <div class="lobby-col">
+      <h3>难度</h3>
+      <div class="diff-pick" id="lobby-diff"></div>
+      <p class="diff-desc" id="diff-desc"></p>
+      <h3>住户 <small id="lobby-count"></small></h3>
+      <ul class="slots" id="lobby-players"></ul>
+      <div class="bot-row" id="bot-row">
+        <span>加电脑：</span>
+        <button class="btn dark small" data-bot="easy">菜鸟</button>
+        <button class="btn dark small" data-bot="normal">老手</button>
+        <button class="btn dark small" data-bot="hard">大神</button>
+        <button class="btn dark small" data-bot="ai" id="bot-ai" hidden>智谱 AI</button>
+      </div>
+      <div class="lobby-actions">
+        <button class="btn dark" id="btn-invite">邀请在线玩家</button>
+        <button class="btn fu big" id="btn-start">熄灯，开始</button>
+      </div>
+      <p class="muted" id="lobby-hint"></p>
+    </div>
+    <div class="lobby-col chat-col">
+      <h3>夜谈</h3>
+      <div class="chat" id="lobby-chat"></div>
+      <form class="chat-form" data-chat><input maxlength="200" placeholder="说点什么…" aria-label="聊天"><button class="btn dark small">发送</button></form>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 对局 ============ -->
+<section id="screen-game" class="screen" hidden>
+  <canvas id="stage"></canvas>
+  <div class="hud-top">
+    <div class="hud-clock" id="hud-clock"><span class="lbl">距天亮</span><b id="clock">--:--</b></div>
+    <div class="hud-ghost" id="hud-ghost">
+      <div class="g-row"><span class="g-name">猛鬼 <b id="g-lv">1</b> 级</span><span class="g-stat" id="g-stat"></span></div>
+      <div class="hpbar"><i id="g-hp"></i><span id="g-hptext"></span></div>
+    </div>
+    <div class="hud-right">
+      <button class="icon-btn" id="btn-chat" aria-label="聊天">💬<em id="chat-badge" hidden></em></button>
+      <button class="icon-btn" id="btn-menu" aria-label="菜单">☰</button>
+    </div>
+  </div>
+  <div class="hud-res" id="hud-res">
+    <span class="res gold"><i class="coin"></i><b id="r-gold">0</b><small id="r-inc"></small></span>
+    <span class="res energy"><i class="bolt"></i><b id="r-energy">0</b><small id="r-erate"></small></span>
+  </div>
+  <div class="banner" id="banner" hidden></div>
+  <div class="danger" id="danger" aria-hidden="true"></div>
+  <button class="focus-btn" id="btn-focus" hidden>全图</button>
+
+  <div class="dock" id="dock">
+    <div class="dock-main" id="dock-main"></div>
+  </div>
+  <div class="sheet" id="sheet" hidden></div>
+
+  <aside class="drawer" id="drawer" hidden>
+    <div class="drawer-head"><b>住户</b><button class="icon-btn" data-close-drawer aria-label="关闭">✕</button></div>
+    <ul class="plist" id="plist"></ul>
+    <div class="chat" id="game-chat"></div>
+    <form class="chat-form" data-chat><input maxlength="200" placeholder="说点什么…" aria-label="聊天"><button class="btn dark small">发送</button></form>
+  </aside>
+
+  <div class="end" id="end" hidden></div>
+</section>
+
+<div class="screen loading" id="screen-loading"><p class="flicker">正在熄灯…</p></div>
+
+<div class="modal-root" id="modal-root" hidden></div>
+<div id="invite-root" aria-live="polite"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<script type="module" src="/dorm/js/app.js"></script>
+</body>
+</html>

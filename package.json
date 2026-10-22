@@ -1,11 +1,11 @@
 {
   "name": "catan-online",
   "version": "1.0.0",
-  "description": "网页版卡坦岛：4/6/8 人地图、多人联机、账号与战绩（SQLite），零第三方依赖",
+  "description": "朋友游戏厅：卡坦岛、猛鬼宿舍等联机游戏，账号与战绩（SQLite），零第三方依赖",
   "main": "server/index.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
-    "test": "node test/sim.js && node test/socket.js"
+    "test": "node test/sim.js && node test/socket.js && node test/dorm-sim.js && node test/dorm-socket.js"
   },
   "engines": {
     "node": ">=22.13"

@@ -1406,8 +1406,9 @@ function showInvite(d) {
   const card = document.createElement('div');
   card.className = 'invite-card';
   card.dataset.code = d.code;
-  card.innerHTML = `<div class="ic-text"><b>${esc(d.from)}</b> 邀请你加入「${esc(d.title)}」
-      <small>${d.size} 人地图，已有 ${d.players} / ${d.max} 人${inGame ? '。接受后，你当前的对局将暂时由电脑代打' : ''}</small></div>
+  const other = d.game && d.game !== 'catan';
+  card.innerHTML = `<div class="ic-text"><b>${esc(d.from)}</b> 邀请你${other ? `玩${esc(d.gameName)}，` : ''}加入「${esc(d.title)}」
+      <small>${esc(d.detail || `${d.size} 人地图`)}，已有 ${d.players} / ${d.max} 人${inGame ? '。接受后，你当前的对局将暂时由电脑代打' : ''}</small></div>
     <div class="ic-btns"><button class="btn ghost ic-no">忽略</button><button class="btn primary ic-yes">加入</button></div>
     <i class="ic-timer"></i>`;
   root.prepend(card);
@@ -1417,11 +1418,15 @@ function showInvite(d) {
     setTimeout(() => card.remove(), 250);
   };
   const timer = setTimeout(() => {
-    send('inviteReply', { fromUser: d.fromUser, code: d.code, accept: false });
+    send('inviteReply', { game: d.game || 'catan', fromUser: d.fromUser, code: d.code, accept: false });
     close();
   }, 60000);
   card.querySelector('.ic-yes').onclick = () => {
     clearTimeout(timer);
+    if (other) {
+      location.href = `${d.path}?room=${encodeURIComponent(d.code)}`;
+      return;
+    }
     sound.unlock();
     closeModal();
     send('join', { code: d.code });
@@ -1429,12 +1434,12 @@ function showInvite(d) {
   };
   card.querySelector('.ic-no').onclick = () => {
     clearTimeout(timer);
-    send('inviteReply', { fromUser: d.fromUser, code: d.code, accept: false });
+    send('inviteReply', { game: d.game || 'catan', fromUser: d.fromUser, code: d.code, accept: false });
     close();
   };
   sound.play('offer');
   setTimeout(() => sound.play('turn'), 250);
-  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification(`${d.from} 邀请你玩卡坦岛`);
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification(`${d.from} 邀请你玩${d.gameName || '卡坦岛'}`);
 }
 
 // ======================= 语音 =======================

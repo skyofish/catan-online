@@ -18,7 +18,10 @@ let retry = 0;
 let pollTimer = null;
 
 // 本地备用的游戏目录（未登录时也能展示柜子里有什么）
-const PREVIEW = [{ id: 'catan', name: '卡坦岛', tagline: '在小岛上开拓、交易、建造，率先拿到胜利分', players: '2–8 人', minutes: '约 60 分钟' }];
+const PREVIEW = [
+  { id: 'catan', name: '卡坦岛', tagline: '在小岛上开拓、交易、建造，率先拿到胜利分', players: '2–8 人', minutes: '约 60 分钟' },
+  { id: 'dorm', name: '猛鬼宿舍', tagline: '熄灯后猛鬼出没。躺平发育、造塔守门，活到天亮', players: '1–8 人', minutes: '约 10 分钟' },
+];
 
 // ---------------- 盒盖插画 ----------------
 // 卡坦岛：用固定种子画一座 19 块的小岛
@@ -47,7 +50,29 @@ function catanArt() {
     <circle cx="160" cy="100" r="5.5" fill="#f6ecd2" stroke="#7a5531"/>
   </svg>`;
 }
-const ART = { catan: catanArt };
+// 猛鬼宿舍：熄灯后的走廊，尽头一只发光的眼睛
+function dormArt() {
+  let doors = '';
+  for (let i = 0; i < 4; i++) {
+    const x = 34 + i * 70;
+    doors += `<rect x="${x}" y="40" width="34" height="58" rx="2" fill="#1d1416" stroke="#3b2328" stroke-width="2"/>
+      <rect x="${x + 4}" y="46" width="26" height="14" fill="${i === 2 ? '#d8c27a' : '#120c0d'}" opacity="${i === 2 ? 0.55 : 1}"/>
+      <circle cx="${x + 28}" cy="72" r="2" fill="#6d5b4a"/>`;
+  }
+  return `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <defs>
+      <radialGradient id="dorm-eye" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd0d0"/><stop offset=".35" stop-color="#e0262c"/><stop offset="1" stop-color="#e0262c" stop-opacity="0"/></radialGradient>
+      <linearGradient id="dorm-floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1a1d"/><stop offset="1" stop-color="#0a0607"/></linearGradient>
+    </defs>
+    <rect x="0" y="100" width="320" height="100" fill="url(#dorm-floor)"/>
+    ${doors}
+    <path d="M0 100 H320" stroke="#4a2c31" stroke-width="2"/>
+    <g opacity=".9"><path d="M210 190 C200 150 214 118 236 112 C258 118 272 150 262 190 C252 182 246 192 236 184 C226 192 220 182 210 190 Z" fill="#d9d4cf" opacity=".18"/>
+      <circle cx="228" cy="134" r="9" fill="url(#dorm-eye)"/><circle cx="246" cy="134" r="9" fill="url(#dorm-eye)"/></g>
+    <path d="M60 170 l6 -3 l-2 8 l9 -5 M150 186 l8 -2 l-3 6" stroke="#7a1218" stroke-width="2" fill="none" opacity=".7"/>
+  </svg>`;
+}
+const ART = { catan: catanArt, dorm: dormArt };
 
 function boxHTML(g, { preview = false } = {}) {
   const live = g.live || {};
@@ -57,7 +82,7 @@ function boxHTML(g, { preview = false } = {}) {
   const st = live.stats;
   const mine = st && st.games ? `你玩过 ${st.games} 局，赢了 ${st.wins} 局` : '你还没有玩过';
   const href = live.myRoom ? `${g.path}?room=${encodeURIComponent(live.myRoom)}` : g.path;
-  return `<li class="box ${preview ? '' : 'playable'}">
+  return `<li class="box box-${esc(g.id)} ${preview ? '' : 'playable'}">
     <div class="box-art">${(ART[g.id] || (() => ''))()}<h3 class="box-title">${esc(g.name)}</h3>${live.myRoom ? '<span class="live-badge">你的对局进行中</span>' : ''}</div>
     <div class="box-body">
       <p class="tagline">${esc(g.tagline)}</p>
@@ -190,23 +215,25 @@ function showInvite(d) {
   const card = document.createElement('div');
   card.className = 'invite-card';
   card.dataset.code = d.code;
-  card.innerHTML = `<div><b>${esc(d.from)}</b> 邀请你玩卡坦岛「${esc(d.title)}」<small>${d.size} 人地图，已有 ${d.players} / ${d.max} 人</small></div>
+  const gameName = d.gameName || '卡坦岛';
+  const path = d.path || '/catan/';
+  card.innerHTML = `<div><b>${esc(d.from)}</b> 邀请你玩${esc(gameName)}「${esc(d.title)}」<small>${esc(d.detail || `${d.size} 人地图`)}，已有 ${d.players} / ${d.max} 人</small></div>
     <div class="ic-btns"><button class="btn ghost ic-no">忽略</button><button class="btn primary ic-yes">加入</button></div><i class="ic-timer"></i>`;
   root.prepend(card);
   while (root.children.length > 3) root.lastChild.remove();
   const timer = setTimeout(() => decline(), 60000);
   function decline() {
     clearTimeout(timer);
-    send('inviteReply', { game: 'catan', fromUser: d.fromUser, code: d.code, accept: false });
+    send('inviteReply', { game: d.game || 'catan', fromUser: d.fromUser, code: d.code, accept: false });
     card.remove();
   }
   card.querySelector('.ic-yes').onclick = () => {
     clearTimeout(timer);
-    location.href = '/catan/?room=' + encodeURIComponent(d.code);
+    location.href = path + '?room=' + encodeURIComponent(d.code);
   };
   card.querySelector('.ic-no').onclick = decline;
   chime();
-  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification(`${d.from} 邀请你玩卡坦岛`);
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification(`${d.from} 邀请你玩${gameName}`);
 }
 
 function toast(msg) {

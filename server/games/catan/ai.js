@@ -59,13 +59,14 @@ function parseJSON(text) {
   return JSON.parse(s.slice(a, b + 1));
 }
 
-async function ask(user, maxTokens = 200) {
+// system 默认为卡坦岛的提示词；其他游戏（如猛鬼宿舍）可传入自己的提示词，共用同一套并发控制与用量统计
+async function ask(user, maxTokens = 200, system = SYSTEM) {
   return slot(async () => {
     stats.calls++;
     const body = {
       model: CFG.model,
       messages: [
-        { role: 'system', content: SYSTEM },
+        { role: 'system', content: system },
         { role: 'user', content: user },
       ],
       temperature: 0.3,
@@ -347,4 +348,4 @@ async function decide(g, pid, mem, onAsk = () => {}) {
   return null;
 }
 
-module.exports = { enabled, decide, publicStats, CFG, SYSTEM };
+module.exports = { enabled, decide, publicStats, ask, CFG, SYSTEM };

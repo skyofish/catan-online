@@ -118,7 +118,19 @@ function untrackConn(conn) {
 // ======================= 游戏模块 =======================
 const platform = { db, userConns, HttpError, requireUser };
 const catan = require('./games/catan')(platform);
-const GAMES = { catan };
+const dorm = require('./games/dorm')(platform);
+const GAMES = { catan, dorm };
+
+// 玩家当前状态（供各游戏的「邀请在线玩家」列表）：idle 空闲 / room 在某个游戏的房间里 / playing 对局中
+platform.presence = (userId) => {
+  let st = 'idle';
+  for (const g of Object.values(GAMES)) {
+    const s = g.presence ? g.presence(userId) : null;
+    if (s === 'playing') return 'playing';
+    if (s === 'room') st = 'room';
+  }
+  return st;
+};
 
 // 平台大厅展示的游戏目录（以后加新游戏：在 server/games/ 下加模块，并在这里登记）
 const CATALOG = [
@@ -130,6 +142,15 @@ const CATALOG = [
     players: '2–8 人',
     minutes: '约 60 分钟',
     features: ['4 / 6 / 8 人地图', '内置电脑与 AI 玩家', '房间语音'],
+  },
+  {
+    id: 'dorm',
+    name: '猛鬼宿舍',
+    path: '/dorm/',
+    tagline: '熄灯后猛鬼出没。躺平发育、造塔守门，活到天亮',
+    players: '1–8 人',
+    minutes: '约 10 分钟',
+    features: ['合作塔防', '四种难度', '电脑与 AI 队友'],
   },
 ];
 
@@ -259,6 +280,7 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
 };
 const gzCache = new Map();
 const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -322,7 +344,7 @@ function serveFile(req, res, file) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, uptime: process.uptime() | 0 });
+  if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, dormRooms: dorm.rooms.size, uptime: process.uptime() | 0 });
   if (url.pathname.startsWith('/api/')) return void handleApi(req, res, url);
 
   let p;
@@ -351,8 +373,8 @@ const server = http.createServer((req, res) => {
 });
 
 // ======================= WebSocket =======================
-// /hub/ws：平台大厅（在线状态、接收邀请）；/catan/ws：卡坦岛；/ws：旧版卡坦岛地址
-const WS_ROUTES = { '/hub/ws': null, '/catan/ws': catan, '/ws': catan };
+// /hub/ws：平台大厅（在线状态、接收邀请）；/catan/ws：卡坦岛；/dorm/ws：猛鬼宿舍；/ws：旧版卡坦岛地址
+const WS_ROUTES = { '/hub/ws': null, '/catan/ws': catan, '/dorm/ws': dorm, '/ws': catan };
 
 const platformHandlers = {
   hello(conn, d) {
@@ -403,11 +425,16 @@ attachWS(server, Object.keys(WS_ROUTES), (conn, req) => {
 
     let h = platformHandlers[m.t];
     let target = null;
-    if (!h && conn.game) {
+    // 回复邀请：交给发出邀请的那个游戏（在任何页面都可能收到别的游戏的邀请）
+    const fwd = HUB_FORWARD.has(m.t) && m.d && GAMES[m.d.game];
+    if (!h && fwd) {
+      target = fwd;
+      h = target.handlers[m.t];
+    } else if (!h && conn.game) {
       h = conn.game.handlers[m.t];
       target = conn.game;
     } else if (!h && HUB_FORWARD.has(m.t)) {
-      target = GAMES[(m.d && m.d.game) || 'catan'];
+      target = GAMES.catan;
       h = target && target.handlers[m.t];
     }
     if (!h) return;
