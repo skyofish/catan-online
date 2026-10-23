@@ -29,7 +29,7 @@ const LEVEL_TAG = { easy: '学徒', normal: '工头', hard: '大亨', ai: 'AI' }
 // 新手教程的固定开局：你的手牌、导师的手牌、商人
 const TUTORIAL = {
   deckTop: [
-    'loc:birmingham', 'loc:coventry', 'ind:cg', 'ind:brewery', 'loc:redditch', 'ind:iron', 'loc:dudley', 'ind:coal',
+    'loc:birmingham', 'loc:coventry', 'ind:pottery', 'ind:brewery', 'loc:redditch', 'ind:iron', 'loc:dudley', 'ind:coal',
     'loc:coalbrookdale', 'loc:wolverhampton', 'loc:kidderminster', 'ind:iron', 'loc:worcester', 'ind:coal', 'loc:stafford', 'loc:cannock',
   ],
   merchants: { shrewsbury: ['blank'], gloucester: ['pottery', 'all'], oxford: ['cotton', 'goods'] },

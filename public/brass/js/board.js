@@ -165,6 +165,11 @@ export class BoardView {
   linkGeom(l) {
     const a = this.endPos(l.a);
     const b = this.endPos(l.b);
+    // 经过中途地点的线路（基德明斯特—南郊酒坊—伍斯特）：折线，标记放在第一段中间
+    if (l.via) {
+      const v = this.endPos(l.via);
+      return { a, b, c: v, d: `M${a.x} ${a.y}L${v.x} ${v.y}L${b.x} ${b.y}`, mid: { x: (a.x + v.x) / 2, y: (a.y + v.y) / 2 } };
+    }
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;

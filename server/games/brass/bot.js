@@ -7,7 +7,7 @@
 
 const D = require('./data');
 const { BrassGame, SELLABLE, ACCEPTS } = require('./game');
-const { TILES, IND, LINK_BY_ID } = D;
+const { TILES, IND, LINK_BY_ID, linkEnds } = D;
 
 const RAIL_ROUNDS = { 2: 10, 3: 9, 4: 8 };
 
@@ -50,8 +50,9 @@ function flipChance(g, t, loc, pid) {
       // 再修一段就能连到商人
       for (const l of D.LINKS) {
         if (g.links[l.id] || !(g.era === 'canal' ? l.canal : l.rail)) continue;
-        const other = dist.has(l.a) ? l.b : dist.has(l.b) ? l.a : null;
-        if (other && g.merchants[other] && g.merchants[other].some((m) => ACCEPTS[t.ind].includes(m.type))) conn = 1;
+        const ends = linkEnds(l);
+        if (!ends.some((x) => dist.has(x))) continue;
+        for (const other of ends) if (g.merchants[other] && g.merchants[other].some((m) => ACCEPTS[t.ind].includes(m.type))) conn = 1;
       }
     }
     const need = TILES[t.ind][t.lv].beer;
@@ -94,8 +95,7 @@ function evaluate(g, pid, level = 'normal') {
   // 线路：两端的图标
   for (const [id, o] of Object.entries(g.links)) {
     if (o !== pid) continue;
-    const l = LINK_BY_ID[id];
-    v += iconsAt(g, l.a) + iconsAt(g, l.b);
+    for (const x of linkEnds(LINK_BY_ID[id])) v += iconsAt(g, x);
   }
   // 收入与金钱（钱多了边际价值递减）
   const lvl = g.level(p);
@@ -194,7 +194,7 @@ function candidates(g, pid, level = 'normal', avoid = null) {
   // 教程：电脑不去碰新手要用的地方
   if (avoid && avoid.length) {
     const bad = new Set(avoid);
-    const touches = (c) => (c.a.loc && bad.has(c.a.loc)) || (c.a.links || []).some((id) => bad.has(LINK_BY_ID[id].a) || bad.has(LINK_BY_ID[id].b));
+    const touches = (c) => (c.a.loc && bad.has(c.a.loc)) || (c.a.links || []).some((id) => linkEnds(LINK_BY_ID[id]).some((x) => bad.has(x)));
     out = out.filter((c) => !touches(c));
   }
   if (level === 'easy') {

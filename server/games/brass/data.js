@@ -5,10 +5,10 @@
 const IND = ['cotton', 'goods', 'pottery', 'brewery', 'coal', 'iron'];
 const IND_NAME = { cotton: '棉纺厂', goods: '制造厂', pottery: '陶瓷厂', brewery: '酿酒厂', coal: '煤矿', iron: '炼铁厂' };
 
-// 产业板块（每位玩家一套，按等级从低到高叠放在产业板上）
+// 产业板块（每位玩家一套，按等级从低到高叠放在产业板上）。数值与官方板块一致。
 // cost 金钱；coal / iron 建造时消耗；beer 出售时需要的啤酒；vp 翻面后每个时代结算的分数；
 // income 翻面时收入轨前进的格数；links 翻面后为相邻线路提供的分数图标；
-// res 煤矿 / 炼铁厂建造时放上的方块数；canal 仅运河时代可建（铁路时代必须先开发掉）；
+// res 煤矿 / 炼铁厂建造时放上的方块数；canal 仅运河时代可建（铁路时代必须先开发掉）；rail 仅铁路时代可建；
 // nodev 灯泡标记：不能通过开发移除
 const T = (count, cost, coal, iron, beer, vp, income, links, extra = {}) => ({ count, cost, coal, iron, beer, vp, income, links, ...extra });
 const TILES = {
@@ -29,17 +29,17 @@ const TILES = {
     8: T(2, 20, 0, 2, 1, 11, 1, 1),
   },
   pottery: {
-    1: T(1, 17, 0, 1, 1, 10, 5, 1, { canal: true, nodev: true }),
+    1: T(1, 17, 0, 1, 1, 10, 5, 1, { nodev: true }),
     2: T(1, 0, 1, 0, 1, 1, 1, 1),
     3: T(1, 22, 2, 0, 2, 11, 5, 1, { nodev: true }),
     4: T(1, 0, 1, 0, 1, 1, 1, 1),
-    5: T(1, 24, 2, 0, 2, 20, 5, 1),
+    5: T(1, 24, 2, 0, 2, 20, 5, 1, { rail: true }),
   },
   brewery: {
     1: T(2, 5, 0, 1, 0, 4, 4, 2, { canal: true }),
     2: T(2, 7, 0, 1, 0, 5, 5, 2),
     3: T(2, 9, 0, 1, 0, 7, 5, 2),
-    4: T(1, 9, 0, 1, 0, 10, 5, 2),
+    4: T(1, 9, 0, 1, 0, 10, 5, 2, { rail: true }),
   },
   coal: {
     1: T(1, 5, 0, 0, 0, 1, 4, 2, { canal: true, res: 2 }),
@@ -65,6 +65,7 @@ function matStacks() {
 }
 
 // 城镇：region 决定地点牌在几人局中使用（teal 仅 4 人；blue 3–4 人；其余都用；farm 没有地点牌）
+// cards：地点牌张数（数字，或按人数 { 3: n, 4: n }）
 // slots：每个产业格可以建的产业（两个图标的格子任选其一）
 const LOCS = [
   { id: 'leek', name: '利克', region: 'blue', x: 690, y: 110, cards: 2, slots: [['cotton', 'goods'], ['cotton', 'coal']] },
@@ -72,19 +73,19 @@ const LOCS = [
   { id: 'belper', name: '贝尔珀', region: 'teal', x: 1080, y: 105, cards: 2, slots: [['cotton', 'goods'], ['coal'], ['pottery']] },
   { id: 'derby', name: '德比', region: 'teal', x: 1250, y: 235, cards: 3, slots: [['cotton', 'brewery'], ['cotton', 'goods'], ['iron']] },
   { id: 'stone', name: '斯通', region: 'blue', x: 400, y: 350, cards: 2, slots: [['cotton', 'brewery'], ['goods', 'coal']] },
-  { id: 'uttoxeter', name: '阿特克西特', region: 'blue', x: 830, y: 280, cards: 2, slots: [['goods', 'brewery'], ['cotton', 'brewery']] },
+  { id: 'uttoxeter', name: '阿特克西特', region: 'blue', x: 830, y: 280, cards: { 3: 1, 4: 2 }, slots: [['goods', 'brewery'], ['cotton', 'brewery']] },
   { id: 'stafford', name: '斯塔福德', region: 'red', x: 500, y: 470, cards: 2, slots: [['goods', 'brewery'], ['pottery']] },
   { id: 'burton', name: '伯顿', region: 'red', x: 1080, y: 400, cards: 2, slots: [['goods', 'coal'], ['brewery']] },
   { id: 'cannock', name: '坎诺克', region: 'red', x: 800, y: 520, cards: 2, slots: [['goods', 'coal'], ['coal']] },
   { id: 'tamworth', name: '塔姆沃思', region: 'red', x: 1190, y: 570, cards: 1, slots: [['cotton', 'coal'], ['cotton', 'coal']] },
   { id: 'walsall', name: '沃尔索尔', region: 'red', x: 880, y: 670, cards: 1, slots: [['iron', 'goods'], ['goods', 'brewery']] },
-  { id: 'farm1', name: '北郊酒坊', region: 'farm', x: 610, y: 560, cards: 0, slots: [['brewery']] },
+  { id: 'farm1', name: '北郊酒坊', region: 'farm', x: 700, y: 610, cards: 0, slots: [['brewery']] },
   { id: 'coalbrookdale', name: '科尔布鲁克代尔', region: 'yellow', x: 260, y: 720, cards: 3, slots: [['iron', 'brewery'], ['iron'], ['coal']] },
   { id: 'wolverhampton', name: '伍尔弗汉普顿', region: 'yellow', x: 570, y: 720, cards: 2, slots: [['goods'], ['goods', 'coal']] },
   { id: 'dudley', name: '达德利', region: 'yellow', x: 590, y: 860, cards: 2, slots: [['coal'], ['iron']] },
-  { id: 'kidderminster', name: '基德明斯特', region: 'yellow', x: 320, y: 930, cards: 2, slots: [['cotton', 'coal'], ['cotton']] },
-  { id: 'worcester', name: '伍斯特', region: 'yellow', x: 520, y: 1040, cards: 2, slots: [['cotton'], ['cotton']] },
-  { id: 'farm2', name: '南郊酒坊', region: 'farm', x: 150, y: 1030, cards: 0, slots: [['brewery']] },
+  { id: 'kidderminster', name: '基德明斯特', region: 'yellow', x: 285, y: 915, cards: 2, slots: [['cotton', 'coal'], ['cotton']] },
+  { id: 'worcester', name: '伍斯特', region: 'yellow', x: 575, y: 1065, cards: 2, slots: [['cotton'], ['cotton']] },
+  { id: 'farm2', name: '南郊酒坊', region: 'farm', x: 425, y: 1025, cards: 0, slots: [['brewery']] },
   { id: 'birmingham', name: '伯明翰', region: 'purple', x: 960, y: 850, cards: 3, slots: [['cotton', 'goods'], ['goods'], ['iron'], ['goods']] },
   { id: 'nuneaton', name: '纳尼顿', region: 'purple', x: 1370, y: 700, cards: 1, slots: [['goods', 'brewery'], ['cotton', 'coal']] },
   { id: 'coventry', name: '考文垂', region: 'purple', x: 1360, y: 880, cards: 3, slots: [['pottery'], ['goods', 'coal'], ['iron', 'goods']] },
@@ -99,11 +100,13 @@ const MERCHANTS = [
   { id: 'gloucester', name: '格洛斯特', x: 340, y: 1120, slots: 2, minPlayers: 2, bonus: { develop: 1 }, bonusText: '免费开发' },
   { id: 'oxford', name: '牛津', x: 1260, y: 1100, slots: 2, minPlayers: 2, bonus: { income: 2 }, bonusText: '收入 +2' },
 ];
-// 商人板块：all = 三种商品都收；blank = 不收货（但仍是商人，可买煤）
-const MERCHANT_TILES = { 2: ['cotton', 'goods', 'pottery', 'all', 'blank'], 3: ['goods', 'blank'], 4: ['cotton', 'blank'] };
+// 商人板块：all = 三种商品都收；blank = 不收货（但仍是商人，可买煤）。
+// 板块上印着适用人数：2 人局 5 块，3 人局再加 2 块，4 人局再加 2 块（共 9 块）
+const MERCHANT_TILES = { 2: ['cotton', 'goods', 'all', 'blank', 'blank'], 3: ['pottery', 'blank'], 4: ['cotton', 'goods'] };
 
-// 线路：canal 运河时代可建，rail 铁路时代可建；bend 让线路略微弯曲（绘制用）
-const L = (a, b, canal, rail, bend = 0) => ({ id: `${a}-${b}`, a, b, canal, rail, bend });
+// 线路：canal 运河时代可建，rail 铁路时代可建；bend 让线路略微弯曲（绘制用）；
+// via：线路中途经过的地点（基德明斯特—伍斯特这段经过南郊酒坊，一块线路板块同时连通三处）
+const L = (a, b, canal, rail, bend = 0, via = null) => ({ id: via ? `${a}-${via}-${b}` : `${a}-${b}`, a, b, canal, rail, bend, ...(via ? { via } : {}) });
 const LINKS = [
   L('warrington', 'stoke', 1, 1),
   L('stoke', 'leek', 1, 1, 0.08),
@@ -123,11 +126,11 @@ const LINKS = [
   L('cannock', 'wolverhampton', 1, 1),
   L('burton', 'tamworth', 1, 1),
   L('burton', 'walsall', 1, 0, 0.12),
-  L('tamworth', 'walsall', 1, 1),
+  L('tamworth', 'walsall', 0, 1),
   L('tamworth', 'nuneaton', 1, 1),
   L('tamworth', 'birmingham', 1, 1, 0.05),
   L('nuneaton', 'birmingham', 0, 1, -0.08),
-  L('nuneaton', 'coventry', 1, 1),
+  L('nuneaton', 'coventry', 0, 1),
   L('coventry', 'birmingham', 1, 1),
   L('birmingham', 'oxford', 1, 1, 0.06),
   L('birmingham', 'walsall', 1, 1),
@@ -137,8 +140,7 @@ const LINKS = [
   L('redditch', 'oxford', 1, 1),
   L('redditch', 'gloucester', 1, 1, 0.06),
   L('worcester', 'gloucester', 1, 1),
-  L('worcester', 'farm2', 1, 1),
-  L('kidderminster', 'farm2', 1, 1),
+  L('kidderminster', 'worcester', 1, 1, 0, 'farm2'),
   L('kidderminster', 'dudley', 1, 1),
   L('kidderminster', 'coalbrookdale', 1, 1),
   L('coalbrookdale', 'shrewsbury', 1, 1),
@@ -147,14 +149,16 @@ const LINKS = [
   L('wolverhampton', 'walsall', 1, 1),
 ].map((l) => ({ ...l, canal: !!l.canal, rail: !!l.rail }));
 
-// 行业牌数量：cg = 棉纺厂 / 制造厂 两用牌
+// 产业牌数量：cg = 棉纺厂 / 制造厂 两用牌（2 人局没有）。整副牌 2 / 3 / 4 人为 40 / 54 / 64 张
 const INDUSTRY_CARDS = {
-  iron: { 2: 2, 3: 3, 4: 4 },
+  iron: { 2: 4, 3: 4, 4: 4 },
   coal: { 2: 2, 3: 2, 4: 3 },
-  brewery: { 2: 3, 3: 4, 4: 5 },
+  brewery: { 2: 5, 3: 5, 4: 5 },
   pottery: { 2: 2, 3: 2, 4: 3 },
-  cg: { 2: 4, 3: 7, 4: 8 },
+  cg: { 2: 0, 3: 6, 4: 8 },
 };
+const locCards = (l, n) => (typeof l.cards === 'number' ? l.cards : l.cards[n] || 0);
+const linkEnds = (l) => (l.via ? [l.a, l.via, l.b] : [l.a, l.b]);
 const CARD_IND = { iron: ['iron'], coal: ['coal'], brewery: ['brewery'], pottery: ['pottery'], cg: ['cotton', 'goods'] };
 const CARD_IND_NAME = { iron: '炼铁厂', coal: '煤矿', brewery: '酿酒厂', pottery: '陶瓷厂', cg: '棉纺 / 制造' };
 
@@ -219,4 +223,6 @@ module.exports = {
   LINK_BY_ID,
   PLACE_NAME,
   publicMap,
+  locCards,
+  linkEnds,
 };

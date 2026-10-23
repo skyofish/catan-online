@@ -23,7 +23,7 @@ function describeAction(g, pid, c) {
     case 'build':
       return `在${placeName(a.loc)}建${tileName(a.ind, g.matTop(p, a.ind))}(£${c.info ? c.info.cost : '?'})${cn}`;
     case 'network':
-      return `修${g.era === 'canal' ? '运河' : '铁路'} ${a.links.map((id) => `${placeName(D.LINK_BY_ID[id].a)}-${placeName(D.LINK_BY_ID[id].b)}`).join('、')}${cn}`;
+      return `修${g.era === 'canal' ? '运河' : '铁路'} ${a.links.map((id) => D.linkEnds(D.LINK_BY_ID[id]).map(placeName).join('-')).join('、')}${cn}`;
     case 'develop':
       return `开发 ${a.inds.map((x) => tileName(x, g.matTop(p, x))).join('、')}${cn}`;
     case 'sell':

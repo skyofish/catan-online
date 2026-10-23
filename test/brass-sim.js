@@ -13,11 +13,14 @@ function totalCards(n) {
   for (const l of D.LOCS) {
     if (l.region === 'teal' && n < 4) continue;
     if (l.region === 'blue' && n < 3) continue;
-    c += l.cards;
+    c += D.locCards(l, n);
   }
   for (const v of Object.values(D.INDUSTRY_CARDS)) c += v[n];
   return c;
 }
+// 整副牌张数与官方一致
+assert.deepStrictEqual([2, 3, 4].map(totalCards), [40, 54, 64], '牌数应为 40 / 54 / 64');
+assert.strictEqual(D.LINKS.length, 39, '共 39 条线路');
 
 function invariants(g) {
   assert(g.market.coal >= 0 && g.market.coal <= D.MARKET.coal.prices.length, '煤市场越界');
@@ -95,6 +98,26 @@ for (const n of [2, 3, 4]) {
   assert.strictEqual(JSON.stringify(g.toJSON()), before, '失败的操作改变了状态');
   const other = g.players.find((p) => p.id !== g.cur().id);
   assert(!g.act(other.id, { type: 'pass', card: other.hand[0].id }).ok, '不是自己的回合也能行动');
+}
+// 途经南郊酒坊的线路同时连通三处；仅铁路板块不能在运河时代建
+{
+  const g = new BrassGame({}, [
+    { id: 'a', name: 'A', color: '#000' },
+    { id: 'b', name: 'B', color: '#111' },
+  ]);
+  const id = 'kidderminster-farm2-worcester';
+  assert.ok(D.LINK_BY_ID[id], '应有途经酒坊的线路');
+  g.links[id] = 'a';
+  const dist = g.distances(['kidderminster']);
+  assert.ok(dist.has('farm2') && dist.has('worcester'), '一段线路连通三处');
+  assert.ok(g.network('a').has('farm2'), '酒坊在网络内');
+  const p = g.P('a');
+  p.mat.brewery = [4];
+  assert.deepStrictEqual(g.slotsFor(p, 'farm2', 'brewery'), [], '运河时代不能建Ⅳ级酿酒厂');
+  p.mat.pottery = [1];
+  g.era = 'rail';
+  assert.ok(g.slotsFor(p, 'stafford', 'pottery').length, '铁路时代可以建Ⅰ级陶瓷厂');
+  assert.strictEqual(g.loanCheck(p), null, '可以贷款');
 }
 console.log(summary.join('\n'));
 console.log('✅ 伯明翰规则模拟通过');

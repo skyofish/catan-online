@@ -479,7 +479,7 @@ const placeName = (id) => {
 };
 const linkName = (id) => {
   const l = S.map.links.find((x) => x.id === id);
-  return l ? `${placeName(l.a)}—${placeName(l.b)}` : id;
+  return l ? (l.via ? [l.a, l.via, l.b] : [l.a, l.b]).map(placeName).join('—') : id;
 };
 const tileName = (ind, lv) => `${ROMAN[lv]}级${IND_NAME[ind]}`;
 const T = (ind, lv) => S.map.tiles[ind][lv];
@@ -835,7 +835,7 @@ function tileStats(ind, lv) {
     ${t.res ? `<span title="建好后放上的方块">产出 ${t.res} 块${ind === 'coal' ? '煤' : '铁'}</span>` : ''}
     ${ind === 'brewery' ? `<span>产出 ${S.game.era === 'canal' ? 1 : 2} 桶啤酒</span>` : ''}
     <span title="翻面后每个时代计分">${sicon('i-vp')}${t.vp} 分</span><span title="翻面时收入前进">${sicon('i-income')}+${t.income} 格</span><span title="线路图标">↔${t.links}</span>
-    ${t.canal ? '<span class="warn">仅运河时代</span>' : ''}${t.nodev ? `<span class="warn">${sicon('i-bulb')}不能开发</span>` : ''}</div>`;
+    ${t.canal ? '<span class="warn">仅运河时代</span>' : ''}${t.rail ? '<span class="warn">仅铁路时代</span>' : ''}${t.nodev ? `<span class="warn">${sicon('i-bulb')}不能开发</span>` : ''}</div>`;
 }
 
 // ---------- 建造 ----------
@@ -989,7 +989,7 @@ function openDevelopSheet() {
     const lv = stack[k];
     const ok = lv && !T(ind, lv).nodev && f.inds.length < 2;
     return `<button class="dev-col ${k ? 'on' : ''}" data-dev="${ind}" ${ok || k ? '' : 'disabled'}>
-      ${icon('i-' + ind, 'big')}<b>${IND_NAME[ind]}</b><span>${lv ? `下一块：${tileName(ind, lv)}` : stack.length ? '' : '已用完'}</span>${k ? `<em class="cnt">×${k}</em>` : ''}${lv && T(ind, lv).nodev ? `<small>${sicon('i-bulb')}灯泡</small>` : ''}${lv && T(ind, lv).canal ? '<small class="warn">仅运河</small>' : ''}</button>`;
+      ${icon('i-' + ind, 'big')}<b>${IND_NAME[ind]}</b><span>${lv ? `下一块：${tileName(ind, lv)}` : stack.length ? '' : '已用完'}</span>${k ? `<em class="cnt">×${k}</em>` : ''}${lv && T(ind, lv).nodev ? `<small>${sicon('i-bulb')}灯泡</small>` : ''}${lv && T(ind, lv).canal ? '<small class="warn">仅运河</small>' : ''}${lv && T(ind, lv).rail ? '<small class="warn">仅铁路</small>' : ''}</button>`;
   }).join('');
   const iron = f.inds.length ? ironNote(f.inds.length) : null;
   const sh = openSheet(
@@ -1436,7 +1436,7 @@ function openMat(pid = S.you) {
           return `<div class="mc-tile ${n ? '' : 'gone'} ${top ? 'top' : ''}" style="--pc:${p.color}">
           <span class="mc-lv">${ROMAN[lv]}</span><span class="mc-n">${n ? '×' + n : '—'}</span>
           <span class="mc-row">£${t.cost}${t.coal ? ` ${sicon('i-cube-coal')}${t.coal}` : ''}${t.iron ? ` ${sicon('i-cube-iron')}${t.iron}` : ''}${['cotton', 'goods', 'pottery'].includes(ind) ? ` ${sicon('i-beer')}${t.beer}` : ''}</span>
-          <span class="mc-row">${sicon('i-vp')}${t.vp} ${sicon('i-income')}+${t.income} ↔${t.links}${t.canal ? ' <em>运</em>' : ''}${t.nodev ? sicon('i-bulb') : ''}</span></div>`;
+          <span class="mc-row">${sicon('i-vp')}${t.vp} ${sicon('i-income')}+${t.income} ↔${t.links}${t.canal ? ' <em>运</em>' : ''}${t.rail ? ' <em class="rl">铁</em>' : ''}${t.nodev ? sicon('i-bulb') : ''}</span></div>`;
         })
         .join('')}
       </div>`;
@@ -1444,7 +1444,7 @@ function openMat(pid = S.you) {
   }).join('');
   const root = openModal(
     `<h2>产业板</h2><div class="mat-tabs">${tabs}</div>
-    <p class="muted small">每种产业从最低等级开始建；高亮的是下一块。「运」= 仅运河时代可建；${sicon('i-bulb')} = 不能开发。数字依次是：造价、煤、铁、出售所需啤酒；分数、翻面时收入前进的格数、线路图标。</p>
+    <p class="muted small">每种产业从最低等级开始建；高亮的是下一块。「运」= 仅运河时代可建，「铁」= 仅铁路时代可建；${sicon('i-bulb')} = 不能开发。数字依次是：造价、煤、铁、出售所需啤酒；分数、翻面时收入前进的格数、线路图标。</p>
     <div class="mat-grid">${cols}</div>
     <div class="modal-actions"><button class="btn primary" data-close>关闭</button></div>`,
     { cls: 'mat-modal' }

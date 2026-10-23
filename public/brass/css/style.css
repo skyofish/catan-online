@@ -432,6 +432,7 @@ svg.hist { width: 100%; height: 170px; background: rgba(0, 0, 0, 0.25); border-r
 .mc-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
 .mc-row .ico { width: 12px; height: 12px; }
 .mc-row em { font-style: normal; background: #3f78a8; color: #fff; border-radius: 3px; padding: 0 3px; }
+.mc-row em.rl { background: #4a3a30; }
 
 /* ---------- 邀请与提示 ---------- */
 #invite-root { position: fixed; top: 64px; right: 16px; z-index: 70; display: flex; flex-direction: column; gap: 8px; width: min(340px, calc(100vw - 32px)); }

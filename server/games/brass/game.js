@@ -5,7 +5,8 @@
 // 煤 / 铁 / 啤酒的来源按规则自动选择（最近的煤矿、自己的工厂优先），事件里带着来源方便前端做动画。
 
 const D = require('./data');
-const { TILES, IND, IND_NAME, LOC_BY_ID, MERCHANT_BY_ID, LINK_BY_ID, PLACE_NAME, CARD_IND, CARD_IND_NAME } = D;
+const { TILES, IND, IND_NAME, LOC_BY_ID, MERCHANT_BY_ID, LINK_BY_ID, PLACE_NAME, CARD_IND, CARD_IND_NAME, linkEnds } = D;
+const linkName = (id) => linkEnds(LINK_BY_ID[id]).map((x) => PLACE_NAME[x]).join('—');
 
 const SELLABLE = new Set(['cotton', 'goods', 'pottery']);
 const ACCEPTS = { cotton: ['cotton', 'all'], goods: ['goods', 'all'], pottery: ['pottery', 'all'] };
@@ -106,7 +107,7 @@ class BrassGame {
     for (const l of D.LOCS) {
       if (l.region === 'teal' && this.n < 4) continue;
       if (l.region === 'blue' && this.n < 3) continue;
-      for (let i = 0; i < l.cards; i++) cards.push({ id: 'c' + this.cardSeq++, k: 'loc', v: l.id });
+      for (let i = 0; i < D.locCards(l, this.n); i++) cards.push({ id: 'c' + this.cardSeq++, k: 'loc', v: l.id });
     }
     for (const [ind, counts] of Object.entries(D.INDUSTRY_CARDS)) for (let i = 0; i < counts[this.n]; i++) cards.push({ id: 'c' + this.cardSeq++, k: 'ind', v: ind });
     this.shuffle(cards);
@@ -176,9 +177,8 @@ class BrassGame {
       adj.get(a).push(b);
     };
     for (const id of Object.keys(this.links).concat(extra)) {
-      const l = LINK_BY_ID[id];
-      add(l.a, l.b);
-      add(l.b, l.a);
+      const ends = linkEnds(LINK_BY_ID[id]);
+      for (const x of ends) for (const y of ends) if (x !== y) add(x, y);
     }
     return adj;
   }
@@ -207,8 +207,7 @@ class BrassGame {
     this.forTiles((t, loc) => t.owner === pid && set.add(loc));
     for (const [id, o] of Object.entries(this.links)) {
       if (o !== pid) continue;
-      set.add(LINK_BY_ID[id].a);
-      set.add(LINK_BY_ID[id].b);
+      for (const x of linkEnds(LINK_BY_ID[id])) set.add(x);
     }
     return set.size ? set : null;
   }
@@ -370,6 +369,7 @@ class BrassGame {
     const lv = this.matTop(p, ind);
     if (!lv) return [];
     if (this.era === 'rail' && TILES[ind][lv].canal) return [];
+    if (this.era === 'canal' && TILES[ind][lv].rail) return [];
     const row = this.board[loc];
     const mine = row.filter((t) => t && t.owner === p.id).length;
     const singleFree = L.slots.some((sl, s) => sl.length === 1 && sl[0] === ind && !row[s]);
@@ -447,7 +447,8 @@ class BrassGame {
     if (!this.slotsFor(p, loc, ind).includes(slot)) {
       const lv = this.matTop(p, ind);
       if (!lv) throw new Error(`${IND_NAME[ind]}已经全部建完`);
-      if (this.era === 'rail' && TILES[ind][lv].canal) throw new Error(`Ⅰ级${IND_NAME[ind]}只能在运河时代建造，请先开发掉`);
+      if (this.era === 'rail' && TILES[ind][lv].canal) throw new Error(`${tileName(ind, lv)}只能在运河时代建造，请先开发掉`);
+      if (this.era === 'canal' && TILES[ind][lv].rail) throw new Error(`${tileName(ind, lv)}要到铁路时代才能建造`);
       throw new Error('这个格子不能建造');
     }
     const r = this.planBuild(p, loc, slot, ind);
@@ -496,12 +497,9 @@ class BrassGame {
   }
   linkAdjacent(id, net, extra = []) {
     if (!net) return true;
-    const l = LINK_BY_ID[id];
-    if (net.has(l.a) || net.has(l.b)) return true;
-    return extra.some((e) => {
-      const x = LINK_BY_ID[e];
-      return [x.a, x.b].includes(l.a) || [x.a, x.b].includes(l.b);
-    });
+    const ends = linkEnds(LINK_BY_ID[id]);
+    if (ends.some((x) => net.has(x))) return true;
+    return extra.some((e) => linkEnds(LINK_BY_ID[e]).some((x) => ends.includes(x)));
   }
   planLinks(p, ids) {
     const plan = this.newPlan();
@@ -522,12 +520,11 @@ class BrassGame {
       if (!this.linkAdjacent(id, net, extra)) return { error: '线路必须连接你的网络' };
       extra.push(id);
       if (this.era === 'rail') {
-        const l = LINK_BY_ID[id];
-        if (!this.planCoal(1, p.id, [l.a, l.b], extra, plan)) return { error: '修铁路需要 1 块煤：没有连通的煤矿，也连不到商人' };
+        if (!this.planCoal(1, p.id, linkEnds(LINK_BY_ID[id]), extra, plan)) return { error: '修铁路需要 1 块煤：没有连通的煤矿，也连不到商人' };
       }
     }
     if (ids.length === 2) {
-      const ends = [...new Set(ids.flatMap((id) => [LINK_BY_ID[id].a, LINK_BY_ID[id].b]))];
+      const ends = [...new Set(ids.flatMap((id) => linkEnds(LINK_BY_ID[id])))];
       if (!this.planBeer(1, p.id, ends, extra, plan)) return { error: '一次修两段铁路还需要 1 桶啤酒' };
     }
     if (plan.money > p.money) return { error: `钱不够（需要 £${plan.money}）`, plan };
@@ -570,7 +567,7 @@ class BrassGame {
     this.useCard(p, card, events);
     events.push({ type: 'link', pid: p.id, links: ids, era: this.era, cost: r.plan.money, coal: r.plan.coal, beer: r.plan.beer });
     events.push(...after);
-    const names = ids.map((id) => `${PLACE_NAME[LINK_BY_ID[id].a]}—${PLACE_NAME[LINK_BY_ID[id].b]}`).join('、');
+    const names = ids.map(linkName).join('、');
     this.addLog(`${this.era === 'canal' ? '🚣' : '🚂'} ${p.name} 修建了${this.era === 'canal' ? '运河' : '铁路'}：${names}，花费 £${r.plan.money}`, p.id);
   }
 
@@ -715,7 +712,6 @@ class BrassGame {
   // ---------- 贷款 / 侦察 / 跳过 ----------
   loanCheck(p) {
     if (this.level(p) - 3 < -10) return '收入等级不能低于 -10';
-    if (this.era === 'rail' && !this.deck.length) return '铁路时代牌堆抽完后不能再贷款';
     return null;
   }
   do_loan(p, a, events) {
@@ -868,8 +864,7 @@ class BrassGame {
     // 1) 线路计分
     const links = [];
     for (const [id, owner] of Object.entries(this.links)) {
-      const l = LINK_BY_ID[id];
-      const vp = this.linkIcons(l.a) + this.linkIcons(l.b);
+      const vp = linkEnds(LINK_BY_ID[id]).reduce((s, x) => s + this.linkIcons(x), 0);
       const p = this.P(owner);
       p.vp += vp;
       p.stats.vpLinks += vp;
