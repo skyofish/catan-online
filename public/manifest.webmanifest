@@ -1,0 +1,12 @@
+{
+  "name": "朋友游戏厅",
+  "short_name": "游戏厅",
+  "description": "和朋友一起玩的私人游戏厅：卡坦岛、猛鬼宿舍。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#07060a",
+  "theme_color": "#16302a",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

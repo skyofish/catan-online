@@ -7,6 +7,12 @@
 <meta name="description" content="和朋友一起玩的私人游戏厅。">
 <meta name="theme-color" content="#16302a">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="游戏厅">
+<link rel="apple-touch-icon" href="/favicon.svg">
 <link rel="stylesheet" href="/css/hub.css">
 </head>
 <body data-state="loading">
@@ -41,7 +47,7 @@
         <p class="greet" id="greet"></p>
         <p class="online" id="online"></p>
       </div>
-      <button class="btn ghost" id="btn-logout">退出登录</button>
+      <div class="hall-btns"><button class="btn ghost fs-hub" type="button" data-fullscreen aria-label="全屏"></button><button class="btn ghost" id="btn-logout">退出登录</button></div>
     </div>
     <ul class="shelf" id="shelf" aria-label="选择游戏"></ul>
   </section>

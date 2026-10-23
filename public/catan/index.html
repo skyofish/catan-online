@@ -7,6 +7,12 @@
 <meta name="description" content="网页版卡坦岛：4 / 6 / 8 人地图，好友联机，支持电脑玩家。">
 <meta name="theme-color" content="#0b3f4a">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="游戏厅">
+<link rel="apple-touch-icon" href="/favicon.svg">
 <link rel="stylesheet" href="/catan/css/style.css">
 </head>
 <body data-screen="loading">
@@ -57,7 +63,7 @@
   </header>
   <aside class="ledger">
     <div id="ledger-main" class="ledger-main">
-    <div class="userbar"><span class="chip me-chip"></span><b id="me-name"></b><a class="mini ghost hall-link" href="/">返回游戏大厅</a></div>
+    <div class="userbar"><span class="chip me-chip"></span><b id="me-name"></b><a class="mini ghost hall-link" href="/">返回游戏大厅</a><button class="mini ghost fs-mini" type="button" data-fullscreen aria-label="全屏"></button></div>
 
     <div class="block">
       <h2>开一座新岛</h2>
@@ -107,6 +113,7 @@
       <div class="lobby-head-btns">
         <button class="icon-btn vb vb-spk" aria-label="扬声器"><svg viewBox="0 0 24 24"><use href="#ic-spk"/></svg></button>
       <button class="icon-btn vb vb-mic" aria-label="麦克风"><svg viewBox="0 0 24 24"><use href="#ic-mic-off"/></svg></button>
+        <button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
         <button class="btn ghost" id="btn-leave-lobby">离开</button>
       </div>
     </header>
@@ -156,6 +163,7 @@
     <div class="top-btns">
       <button class="icon-btn vb vb-spk" aria-label="扬声器"><svg viewBox="0 0 24 24"><use href="#ic-spk"/></svg></button>
       <button class="icon-btn vb vb-mic" aria-label="麦克风"><svg viewBox="0 0 24 24"><use href="#ic-mic-off"/></svg></button>
+<button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
       <button class="icon-btn" id="btn-rules" aria-label="规则">?</button>
       <button class="icon-btn" id="btn-settings" aria-label="声音设置">♪</button>
       <button class="icon-btn only-narrow" id="toggle-side" aria-label="日志与聊天">✉<i id="drawer-badge" class="dot" hidden></i></button>

@@ -10,6 +10,9 @@
 - 管理员后台 `/admin`：管理整个平台的账号。
 - 平台名称可在 `.env` 中设置：`PLATFORM_NAME=你喜欢的名字`。
 - 旧的卡坦岛邀请链接（`/?room=XXXXX`）会自动跳转到 `/catan/`。
+- **全屏游玩**：首页、两个游戏的首页 / 房间 / 对局画面右上角都有全屏按钮（像手机上全屏看视频一样，再点一次退出）。
+  打开全屏后在页面之间跳转（例如从大厅进入游戏）会记住这个选择，到新页面点一下屏幕就回到全屏；按返回键或 Esc 退出后不再自动进入。
+  iPhone 的 Safari 不支持网页全屏，按钮会提示「分享 → 添加到主屏幕」，之后从桌面图标打开就是全屏（`public/manifest.webmanifest`）。
 
 ### 添加新游戏
 
@@ -297,6 +300,8 @@ server/
 public/
   index.html, css/hub.css, js/hub.js   平台首页（登录与游戏柜）
   js/session.js   平台共享：登录状态、接口请求、HTTPS 跳转
+  js/fullscreen.js 平台共享：全屏按钮、跨页面保持全屏、iPhone 添加到主屏幕提示
+  manifest.webmanifest  添加到主屏幕后以全屏应用打开
   admin.html, js/admin.js   管理员后台
   catan/
     index.html    卡坦岛页面与 SVG 图标

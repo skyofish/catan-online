@@ -3,6 +3,9 @@ import { BoardView, RES_LIST, RES_NAME, TERRAIN_NAME } from './board.js';
 import * as fx from './fx.js';
 import { Voice } from './voice.js';
 import { getSession, takeHashSession, api as platformApi, upgradeToHttps, goToLogin, wsUrl } from '/js/session.js';
+import { initFullscreen } from '/js/fullscreen.js';
+
+initFullscreen();
 
 // ======================= 基础 =======================
 const $ = (s, r = document) => r.querySelector(s);

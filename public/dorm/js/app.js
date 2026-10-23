@@ -1,5 +1,8 @@
 // 猛鬼宿舍：界面、网络、对局 HUD 与事件编排。
 import { getSession, takeHashSession, api, upgradeToHttps, goToLogin, wsUrl } from '/js/session.js';
+import { initFullscreen } from '/js/fullscreen.js';
+
+initFullscreen();
 import { sound } from './audio.js';
 import { Stage } from './render.js';
 import { iconCanvas } from './sprites.js';

@@ -390,3 +390,6 @@ input:focus { border-color: var(--blood); box-shadow: 0 0 0 2px rgba(196, 22, 31
 @media (prefers-reduced-motion: reduce) {
   .grain, .title, .title::before, .title::after, .eyes, .corridor i { animation: none !important; }
 }
+
+.head-right { display: inline-flex; gap: 10px; align-items: center; }
+.home-head .icon-btn { width: 34px; height: 34px; }

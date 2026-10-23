@@ -774,3 +774,9 @@ body.admin-page { overflow: auto; background-color: var(--sea-deep); background-
 
 .hall-link { text-decoration: none; color: var(--ink); white-space: nowrap; }
 .hall-link:hover { border-color: var(--brass); }
+
+/* 全屏按钮 */
+.fs-mini { width: 30px; padding: 0 !important; display: inline-grid; place-items: center; vertical-align: middle; margin-left: 4px; }
+.fs-mini svg { width: 15px !important; height: 15px !important; }
+.lobby-head-btns { align-items: center; }#btn-leave-lobby { white-space: nowrap; }
+.fs-mini { align-self: stretch; }

@@ -1,5 +1,8 @@
 // 平台大厅：登录、选择游戏、在线状态、接收游戏邀请。
 import { getSession, setSession, takeHashSession, api, upgradeToHttps, safeNext, wsUrl } from './session.js';
+import { initFullscreen } from './fullscreen.js';
+
+initFullscreen();
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

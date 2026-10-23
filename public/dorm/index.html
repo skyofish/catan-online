@@ -6,9 +6,13 @@
 <title>猛鬼宿舍 - {{PLATFORM_NAME}}</title>
 <meta name="description" content="猛鬼宿舍：熄灯后躺平发育、造塔守门，和朋友一起活到天亮。">
 <meta name="theme-color" content="#07060a">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="游戏厅">
+<link rel="apple-touch-icon" href="/favicon.svg">
 <link rel="stylesheet" href="/dorm/css/style.css">
 </head>
 <body data-screen="loading">
@@ -23,7 +27,7 @@
   </div>
   <header class="home-head">
     <a class="back-link" href="/">← 游戏大厅</a>
-    <span class="me" id="me-name"></span>
+    <span class="head-right"><span class="me" id="me-name"></span><button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button></span>
   </header>
   <div class="home-main">
     <h1 class="title" data-text="猛鬼宿舍">猛鬼宿舍</h1>
@@ -77,6 +81,7 @@
   <header class="bar">
     <button class="btn ghost small" id="btn-leave-lobby">← 离开</button>
     <div class="bar-title"><b id="lobby-title"></b><span class="code" id="lobby-code" title="点击复制邀请链接"></span></div>
+<button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
     <button class="icon-btn" id="btn-sound-lobby" aria-label="声音">♪</button>
   </header>
   <div class="lobby-body">
@@ -117,6 +122,7 @@
       <div class="hpbar"><i id="g-hp"></i><span id="g-hptext"></span></div>
     </div>
     <div class="hud-right">
+<button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
       <button class="icon-btn" id="btn-chat" aria-label="聊天">💬<em id="chat-badge" hidden></em></button>
       <button class="icon-btn" id="btn-menu" aria-label="菜单">☰</button>
     </div>
