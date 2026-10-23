@@ -780,3 +780,70 @@ body.admin-page { overflow: auto; background-color: var(--sea-deep); background-
 .fs-mini svg { width: 15px !important; height: 15px !important; }
 .lobby-head-btns { align-items: center; }#btn-leave-lobby { white-space: nowrap; }
 .fs-mini { align-self: stretch; }
+
+/* ============ 手机横屏：手牌放左边、操作放右边，中间整块给地图 ============ */
+@media (orientation: landscape) and (max-height: 540px) {
+  #screen-game {
+    grid-template-columns: calc(150px + env(safe-area-inset-left)) minmax(0, 1fr) calc(158px + env(safe-area-inset-right));
+    grid-template-rows: 42px auto minmax(0, 1fr);
+    grid-template-areas: 'top top top' 'hand board act' 'dev board act';
+  }
+  /* 顶栏：单行 */
+  .topbar { flex-wrap: nowrap; gap: 6px; padding: 0 calc(6px + env(safe-area-inset-right)) 0 calc(6px + env(safe-area-inset-left)); }
+  .status { order: 0; flex: 1 1 auto; font-size: 13px; white-space: nowrap; max-height: none; line-height: 42px; padding-left: 8px; }
+  .room-tag, .bank-info { display: none; }
+  .dice-mini { margin-left: 0; font-size: 18px; }
+  .dice-mini b { font-size: 15px; padding: 0 6px; }
+  .top-btns { gap: 3px; }
+  .top-btns .icon-btn, #toggle-players { width: 30px; height: 30px; }
+  /* 玩家列表、日志聊天：从两侧滑出的抽屉 */
+  .left { position: fixed; left: 0; top: 42px; bottom: 0; width: 240px; transform: translateX(-100%); transition: transform 0.3s; z-index: 30; box-shadow: var(--shadow); }
+  body.players-open .left { transform: none; }
+  .right { position: fixed; right: 0; top: 42px; bottom: 0; width: 280px; transform: translateX(100%); transition: transform 0.3s; z-index: 30; box-shadow: var(--shadow); }
+  body.side-open .right { transform: none; }
+  #toggle-players.only-narrow, #toggle-side.only-narrow { display: inline-grid !important; }
+
+  /* 原来的底部栏拆成左右两列 */
+  .dock { display: contents; }
+  .hand-wrap, .devhand, .actions {
+    background: linear-gradient(90deg, var(--wood-3), var(--wood)); min-width: 0; min-height: 0; z-index: 5;
+  }
+  .hand-wrap { grid-area: hand; padding: 10px 6px 4px calc(6px + env(safe-area-inset-left)); border-right: 2px solid #120b06; }
+  .hand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 6px; padding-top: 4px; }
+  .hcard, .devcard { width: auto; height: 52px; }
+  .hcard .ico { width: 24px; height: 24px; }
+  .hcard b { top: -7px; right: -5px; min-width: 20px; height: 20px; font-size: 12px; }
+  .hcard small { display: none; }
+  .pieces { display: block; font-size: 10px; line-height: 1.3; margin-top: 4px; }
+  .devhand {
+    grid-area: dev; display: grid; grid-template-columns: repeat(3, 1fr); align-content: start; gap: 10px 6px; max-width: none;
+    padding: 8px 6px calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left)); overflow-y: auto; border-right: 2px solid #120b06;
+    font-size: 11px; color: var(--muted);
+  }
+  .devhand > :not(.devcard) { grid-column: 1 / -1; }
+  .devcard { padding: 3px 1px; font-size: 10px; }
+  .devcard svg { width: 24px; height: 24px; }
+  .devcard span { font-size: 9.5px; }
+  .actions {
+    grid-area: act; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 8px; overflow-y: auto;
+    padding: 8px calc(6px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) 6px; border-left: 2px solid #120b06;
+  }
+  .builds { grid-template-columns: 1fr 1fr; gap: 5px; }
+  .btn.build { min-width: 0; padding: 4px 2px; font-size: 12px; gap: 2px; }
+  .cost .ico { width: 14px; height: 14px; }
+  .btn kbd { display: none; }
+  .turn-acts { flex-direction: column; align-items: stretch; gap: 6px; margin-top: auto; }
+  .turn-acts .btn { flex: none; }
+  .btn.big { font-size: 15px; padding: 10px 8px; }
+  .turn-note { font-size: 12px; text-align: center; max-width: none; }
+  /* 棋盘上的浮层 */
+  .hint { top: 6px; font-size: 12px; padding: 4px 12px; max-width: 92%; white-space: normal; text-align: center; }
+  #toast-root { top: 50px; bottom: auto; }
+  #invite-root { top: 50px; }
+  /* 交易等弹窗：资源排成一行，少滚动 */
+  .steppers, .res-pick { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .rp { padding: 4px 2px; }
+  .rp .ico { width: 22px; height: 22px; }
+  .modal { max-height: calc(100vh - 16px); }
+  .trade-panel { top: 46px; right: 8px; width: 230px; max-height: calc(100% - 56px); overflow: auto; }
+}
