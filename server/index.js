@@ -119,7 +119,8 @@ function untrackConn(conn) {
 const platform = { db, userConns, HttpError, requireUser };
 const catan = require('./games/catan')(platform);
 const dorm = require('./games/dorm')(platform);
-const GAMES = { catan, dorm };
+const brass = require('./games/brass')(platform);
+const GAMES = { catan, dorm, brass };
 
 // 玩家当前状态（供各游戏的「邀请在线玩家」列表）：idle 空闲 / room 在某个游戏的房间里 / playing 对局中
 platform.presence = (userId) => {
@@ -151,6 +152,15 @@ const CATALOG = [
     players: '1–8 人',
     minutes: '约 10 分钟',
     features: ['合作塔防', '四种难度', '电脑与 AI 队友'],
+  },
+  {
+    id: 'brass',
+    name: '工业革命：伯明翰',
+    path: '/brass/',
+    tagline: '运河与铁路的时代：建工厂、修线路、卖货物，成为伯明翰的工业大亨',
+    players: '2–4 人',
+    minutes: '约 60–120 分钟',
+    features: ['新手教程', '内置电脑与 AI 玩家', '房间语音'],
   },
 ];
 
@@ -344,7 +354,7 @@ function serveFile(req, res, file) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, dormRooms: dorm.rooms.size, uptime: process.uptime() | 0 });
+  if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, dormRooms: dorm.rooms.size, brassRooms: brass.rooms.size, uptime: process.uptime() | 0 });
   if (url.pathname.startsWith('/api/')) return void handleApi(req, res, url);
 
   let p;
@@ -373,8 +383,8 @@ const server = http.createServer((req, res) => {
 });
 
 // ======================= WebSocket =======================
-// /hub/ws：平台大厅（在线状态、接收邀请）；/catan/ws：卡坦岛；/dorm/ws：猛鬼宿舍；/ws：旧版卡坦岛地址
-const WS_ROUTES = { '/hub/ws': null, '/catan/ws': catan, '/dorm/ws': dorm, '/ws': catan };
+// /hub/ws：平台大厅（在线状态、接收邀请）；/catan/ws：卡坦岛；/dorm/ws：猛鬼宿舍；/brass/ws：工业革命：伯明翰；/ws：旧版卡坦岛地址
+const WS_ROUTES = { '/hub/ws': null, '/catan/ws': catan, '/dorm/ws': dorm, '/brass/ws': brass, '/ws': catan };
 
 const platformHandlers = {
   hello(conn, d) {

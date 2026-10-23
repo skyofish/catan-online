@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>工业革命：伯明翰 - {{PLATFORM_NAME}}</title>
+<meta name="description" content="网页版工业革命：伯明翰。运河与铁路两个时代，2–4 人联机，支持电脑与 AI 玩家、房间语音与新手教程。">
+<meta name="theme-color" content="#1b1410">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="游戏厅">
+<link rel="apple-touch-icon" href="/favicon.svg">
+<link rel="stylesheet" href="/brass/css/style.css">
+</head>
+<body data-screen="loading">
+
+<!-- 全局图标（不能 display:none，否则部分浏览器的渐变失效） -->
+<svg class="defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <linearGradient id="g-brass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4d58a"/><stop offset=".5" stop-color="#c8963e"/><stop offset="1" stop-color="#8a5f22"/></linearGradient>
+    <linearGradient id="g-coin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0b0"/><stop offset=".45" stop-color="#e8b84a"/><stop offset="1" stop-color="#9a6a1c"/></linearGradient>
+    <radialGradient id="g-glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff3c4" stop-opacity=".95"/><stop offset="1" stop-color="#ffcf6b" stop-opacity="0"/></radialGradient>
+
+    <!-- 产业图标 -->
+    <symbol id="i-cotton" viewBox="0 0 32 32"><rect x="9" y="9" width="14" height="14" fill="#f6f3ea"/><path d="M9 11.5H23M9 14.5H23M9 17.5H23M9 20.5H23" stroke="#c7bfae" stroke-width="1.1"/><rect x="7" y="5" width="18" height="4.2" rx="1.6" fill="#9a7148" stroke="#4d3218" stroke-width="1"/><rect x="7" y="22.8" width="18" height="4.2" rx="1.6" fill="#9a7148" stroke="#4d3218" stroke-width="1"/><path d="M23 16c4 1 5 4 3 8" stroke="#f6f3ea" stroke-width="1.6" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-goods" viewBox="0 0 32 32"><g fill="#e3a547" stroke="#5c3a10" stroke-width="1"><rect x="14" y="2.5" width="4" height="6" rx="1"/><rect x="14" y="23.5" width="4" height="6" rx="1"/><rect x="2.5" y="14" width="6" height="4" rx="1"/><rect x="23.5" y="14" width="6" height="4" rx="1"/><rect x="14" y="2.5" width="4" height="6" rx="1" transform="rotate(45 16 16)"/><rect x="14" y="23.5" width="4" height="6" rx="1" transform="rotate(45 16 16)"/><rect x="2.5" y="14" width="6" height="4" rx="1" transform="rotate(45 16 16)"/><rect x="23.5" y="14" width="6" height="4" rx="1" transform="rotate(45 16 16)"/><circle cx="16" cy="16" r="9"/></g><circle cx="16" cy="16" r="3.4" fill="#5c3a10"/><circle cx="16" cy="16" r="6" fill="none" stroke="#fbd58b" stroke-width="1"/></symbol>
+    <symbol id="i-pottery" viewBox="0 0 32 32"><path d="M12 4h8v3.5c4.2 2 6.5 5.6 6.5 10 0 5.6-4.4 10-10.5 10S5.5 23.1 5.5 17.5c0-4.4 2.3-8 6.5-10z" fill="#4f86c6" stroke="#1d3c63" stroke-width="1.2"/><path d="M7 16.5h18" stroke="#eaf2fb" stroke-width="2"/><path d="M8.5 20.5c2 1 4 1.2 7.5 1.2s5.5-.2 7.5-1.2" stroke="#eaf2fb" stroke-width="1" fill="none"/><ellipse cx="16" cy="4.5" rx="4.5" ry="1.3" fill="#2f5d93"/><path d="M11 10.5c-1.5 1.4-2.2 3-2.4 4.4" stroke="#bcd7f3" stroke-width="1.2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-brewery" viewBox="0 0 32 32"><path d="M9.5 4.5h13c2.2 3 3.4 7 3.4 11.5s-1.2 8.5-3.4 11.5h-13C7.3 24.5 6.1 20.5 6.1 16S7.3 7.5 9.5 4.5z" fill="#b27a42" stroke="#4e2f12" stroke-width="1.2"/><path d="M12.5 4.8c-1.2 3.3-1.7 7-1.7 11.2s.5 7.9 1.7 11.2M19.5 4.8c1.2 3.3 1.7 7 1.7 11.2s-.5 7.9-1.7 11.2" stroke="#7a4b1f" stroke-width=".9" fill="none"/><path d="M7.4 10h17.2M7.4 22h17.2" stroke="#3d3d3d" stroke-width="2"/><circle cx="16" cy="16" r="1.6" fill="#4e2f12"/></symbol>
+    <symbol id="i-coal" viewBox="0 0 32 32"><g fill="#222"><circle cx="11" cy="10" r="4"/><circle cx="17" cy="8.5" r="4.5"/><circle cx="22" cy="11" r="3.6"/><circle cx="14" cy="12.5" r="3"/></g><path d="M4.5 12.5h23l-3 11h-17z" fill="#5d5650" stroke="#26221f" stroke-width="1.2"/><path d="M8 16h16M9 19.5h14" stroke="#7a726a" stroke-width="1"/><circle cx="10" cy="26" r="2.6" fill="#26221f"/><circle cx="22" cy="26" r="2.6" fill="#26221f"/><path d="M15 8l2-1.5" stroke="#777" stroke-width=".8"/></symbol>
+    <symbol id="i-iron" viewBox="0 0 32 32"><path d="M3.5 10h17c2 0 6 1 8 3-2 .5-4.5.8-6.5 1.4L20 18h-2v3.5h4.5V25h-14v-3.5H13V18h-2l-1-4C6.5 13.3 4.5 12 3.5 10z" fill="#4b4b52" stroke="#1d1d22" stroke-width="1.1" stroke-linejoin="round"/><path d="M5 10.6h15" stroke="#8a8a94" stroke-width="1"/><rect x="11" y="5" width="9" height="3.6" rx=".8" fill="#ef7d33" stroke="#8a3a0c" stroke-width=".9"/><path d="M12.5 5.6l2 2.4M16 5.6l2 2.4" stroke="#ffd29a" stroke-width=".7"/></symbol>
+    <!-- 资源 -->
+    <symbol id="i-cube-coal" viewBox="0 0 20 20"><path d="M10 2l7 4v8l-7 4-7-4V6z" fill="#2a2725"/><path d="M10 2l7 4-7 4-7-4z" fill="#56514c"/><path d="M10 10v8l7-4V6z" fill="#171513"/></symbol>
+    <symbol id="i-cube-iron" viewBox="0 0 20 20"><path d="M10 2l7 4v8l-7 4-7-4V6z" fill="#d8692a"/><path d="M10 2l7 4-7 4-7-4z" fill="#f5a065"/><path d="M10 10v8l7-4V6z" fill="#a84a17"/></symbol>
+    <symbol id="i-beer" viewBox="0 0 20 20"><path d="M5 3.5h10c1.4 2 2.1 4 2.1 6.5s-.7 4.5-2.1 6.5H5C3.6 14.5 2.9 12.5 2.9 10S3.6 5.5 5 3.5z" fill="#c48a4a" stroke="#4e2f12" stroke-width="1"/><path d="M3.6 7h12.8M3.6 13h12.8" stroke="#3a3a3a" stroke-width="1.3"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.6" fill="url(#g-coin)" stroke="#7a5214" stroke-width="1.1"/><circle cx="10" cy="10" r="6.4" fill="none" stroke="#a87a26" stroke-width=".8"/><text x="10" y="13.6" text-anchor="middle" font-size="10" font-weight="700" fill="#6b4510" font-family="Georgia, serif">£</text></symbol>
+    <symbol id="i-vp" viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.8l-5.2 2.8 1-5.8L1.5 7.7l5.9-.9z" fill="#f2c94c" stroke="#8a6a1f" stroke-width="1"/></symbol>
+    <symbol id="i-income" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.6" fill="#3d7a4a" stroke="#1f4a28" stroke-width="1"/><path d="M10 15V5.5M6 9.2l4-4 4 4" stroke="#e8f7da" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-link" viewBox="0 0 20 20"><path d="M2 10h16M5 6.5L1.8 10 5 13.5M15 6.5l3.2 3.5-3.2 3.5" stroke="#3a2a1a" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-boat" viewBox="0 0 24 24"><path d="M2 14h20l-3 4.5H5z" fill="currentColor"/><rect x="6" y="9" width="9" height="5" rx="1" fill="currentColor"/><rect x="16.5" y="7" width="2" height="7" fill="currentColor"/><path d="M1 21c2-1.2 3.5-1.2 5.5 0s3.5 1.2 5.5 0 3.5-1.2 5.5 0 3.5 1.2 5.5 0" stroke="currentColor" stroke-width="1.4" fill="none" opacity=".7"/></symbol>
+    <symbol id="i-train" viewBox="0 0 24 24"><path d="M3 16V9h9V6h4v3h2l3 3v4z" fill="currentColor"/><rect x="5" y="4" width="3" height="5" fill="currentColor"/><circle cx="7" cy="18" r="2.3" fill="currentColor"/><circle cx="13" cy="18" r="2.3" fill="currentColor"/><circle cx="18.5" cy="18" r="2.3" fill="currentColor"/><circle cx="6.5" cy="2.5" r="1.6" fill="currentColor" opacity=".55"/></symbol>
+    <symbol id="i-card" viewBox="0 0 20 20"><rect x="4" y="2" width="12" height="16" rx="2" fill="#7a2f22" stroke="#f0d79a" stroke-width="1.2"/><path d="M7 6h6M7 10h6M7 14h6" stroke="#f0d79a" stroke-width=".9"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 20 20"><path d="M10 19s-6-6.2-6-10.5a6 6 0 0 1 12 0C16 12.8 10 19 10 19z" fill="currentColor"/><circle cx="10" cy="8.5" r="2.4" fill="#fff6dc"/></symbol>
+    <symbol id="i-factory" viewBox="0 0 20 20"><path d="M2 18V9l5 3V9l5 3V4h3v4h2v10z" fill="currentColor"/><rect x="5" y="14" width="2" height="2" fill="#fff6dc"/><rect x="9" y="14" width="2" height="2" fill="#fff6dc"/></symbol>
+    <symbol id="i-star" viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.8l-5.2 2.8 1-5.8L1.5 7.7l5.9-.9z" fill="currentColor"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 20 20"><path d="M10 2a5.5 5.5 0 0 0-3.3 9.9c.6.5 1 1.2 1 2V15h4.6v-1.1c0-.8.4-1.5 1-2A5.5 5.5 0 0 0 10 2z" fill="#f6d365" stroke="#8a6a1f"/><rect x="7.7" y="15.6" width="4.6" height="2.4" rx=".8" fill="#8a8a8a"/></symbol>
+
+    <!-- 行动图标 -->
+    <symbol id="a-build" viewBox="0 0 24 24"><path d="M3 21V11l5 3v-3l5 3V6h3v6h2v9z" fill="currentColor" opacity=".9"/><path d="M14 2.5l6 6-2 2-6-6z" fill="currentColor"/><path d="M15 6.5l-9 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="0"/></symbol>
+    <symbol id="a-network" viewBox="0 0 24 24"><path d="M5 22L9 2M19 22L15 2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M6 18h12M7 13h10M8 8h8M8.8 4h6.4" stroke="currentColor" stroke-width="2.2"/></symbol>
+    <symbol id="a-develop" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M17 2l4.5 1.5L20 8" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7v10M7 12h10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="a-sell" viewBox="0 0 24 24"><path d="M3 8l9-4 9 4v10l-9 4-9-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3 8l9 4 9-4M12 12v10" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
+    <symbol id="a-loan" viewBox="0 0 24 24"><path d="M2 9l10-6 10 6z" fill="currentColor"/><path d="M4.5 10.5v8M9.5 10.5v8M14.5 10.5v8M19.5 10.5v8" stroke="currentColor" stroke-width="2.2"/><rect x="2" y="19.5" width="20" height="2.5" fill="currentColor"/></symbol>
+    <symbol id="a-scout" viewBox="0 0 24 24"><path d="M2 15l13-7 2.5 4.5-13 7z" fill="currentColor"/><path d="M16.5 7l3-1.6 2.5 4.5-3 1.6z" fill="currentColor"/><path d="M8 19l-2 3M10 18l2 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="a-pass" viewBox="0 0 24 24"><path d="M4 5l9 7-9 7z" fill="currentColor"/><path d="M13 5l9 7-9 7z" fill="currentColor" opacity=".6"/></symbol>
+    <symbol id="a-hint" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-4.2 12.6c.8.6 1.2 1.5 1.2 2.4V18h6v-1c0-.9.4-1.8 1.2-2.4A7 7 0 0 0 12 2z" fill="currentColor"/><rect x="9" y="19.5" width="6" height="2.5" rx="1" fill="currentColor"/></symbol>
+    <symbol id="a-mat" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor" opacity=".75"/><rect x="3" y="13" width="8" height="8" rx="1.5" fill="currentColor" opacity=".75"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="currentColor" opacity=".5"/></symbol>
+
+    <!-- 导师老约翰（教程） -->
+    <symbol id="mentor" viewBox="0 0 64 64"><circle cx="32" cy="34" r="20" fill="#f1cfa8"/><rect x="18" y="4" width="28" height="18" rx="2" fill="#1d1a1a"/><rect x="12" y="20" width="40" height="5" rx="2.5" fill="#1d1a1a"/><rect x="18" y="16" width="28" height="3" fill="#8a2a1c"/><circle cx="25" cy="33" r="2.2" fill="#2a1b10"/><circle cx="39" cy="33" r="2.2" fill="#2a1b10"/><circle cx="39" cy="33" r="5" fill="none" stroke="#c8963e" stroke-width="1.4"/><path d="M44 33l6 10" stroke="#c8963e" stroke-width="1"/><path d="M20 43c4-4 8-4 12-1 4-3 8-3 12 1-4 1-8 0-12-2-4 2-8 3-12 2z" fill="#e8e2d8" stroke="#8d8378" stroke-width=".8"/><path d="M28 50c2 1.5 6 1.5 8 0" stroke="#7a4a2a" stroke-width="1.4" fill="none" stroke-linecap="round"/><path d="M14 58c4-6 10-7 18-7s14 1 18 7v6H14z" fill="#3b2a52"/><path d="M28 51l4 6 4-6" fill="#f6f1e6"/></symbol>
+
+    <!-- 语音图标（与卡坦岛相同） -->
+    <symbol id="ic-spk" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="ic-spk-off" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="ic-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="ic-mic-off" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" opacity=".55"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" opacity=".55"/><path d="M4 4l16 16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<!-- ============ 首页 ============ -->
+<section id="screen-home" class="screen" hidden>
+  <div class="skyline" aria-hidden="true">
+    <svg id="skyline" viewBox="0 0 1600 600" preserveAspectRatio="xMidYMax slice"></svg>
+  </div>
+  <header class="home-title">
+    <p class="eyebrow">1770 — 1870</p>
+    <h1>工业革命<span>伯明翰</span></h1>
+    <p class="lede">运河与铁路的一百年。建工厂、修线路、把货卖到远方，成为英格兰中部的工业大亨。</p>
+  </header>
+  <aside class="ledger">
+    <div class="userbar"><span class="chip me-chip"></span><b id="me-name"></b><a class="mini ghost" href="/">返回游戏大厅</a><button class="mini ghost fs-mini" type="button" data-fullscreen aria-label="全屏"></button></div>
+
+    <button class="tutorial-cta" id="btn-tutorial" type="button">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mentor"/></svg>
+      <span><b>新手教程</b><small>导师老约翰手把手带你打第一局（约 5 分钟）</small></span>
+    </button>
+
+    <div class="block">
+      <h2>开设一家工厂</h2>
+      <div class="opts">
+        <label><input type="checkbox" id="opt-intro"> 入门短局（只玩运河时代）</label>
+        <label><input type="checkbox" id="opt-private"> 不在大厅公开</label>
+      </div>
+      <button class="btn primary wide" id="btn-create">创建房间</button>
+    </div>
+
+    <div class="block">
+      <h2>加入朋友的房间</h2>
+      <div class="join-row"><input id="join-code" maxlength="5" placeholder="房间号，如 K7Q2M" autocapitalize="characters" aria-label="房间号"><button class="btn" id="btn-join">加入</button></div>
+    </div>
+
+    <div class="block grow">
+      <div class="block-head">
+        <div class="seg" role="tablist" aria-label="首页信息">
+          <button role="tab" data-htab="rooms" aria-selected="true">正在进行</button>
+          <button role="tab" data-htab="rank" aria-selected="false">排行榜</button>
+          <button role="tab" data-htab="mine" aria-selected="false">我的战绩</button>
+        </div>
+        <button class="mini ghost" id="btn-refresh">刷新</button>
+      </div>
+      <div id="htab-rooms" class="htab"><div id="room-list" class="room-list"><p class="empty">正在连接服务器…</p></div></div>
+      <div id="htab-rank" class="htab" hidden></div>
+      <div id="htab-mine" class="htab" hidden></div>
+    </div>
+  </aside>
+</section>
+
+<!-- ============ 房间大厅 ============ -->
+<section id="screen-lobby" class="screen" hidden>
+  <div class="lobby">
+    <header class="lobby-head">
+      <div>
+        <h1 id="lobby-title">房间</h1>
+        <p class="muted">房间号 <b id="lobby-code" class="code"></b></p>
+      </div>
+      <div class="head-btns">
+        <button class="icon-btn vb vb-spk" aria-label="扬声器"><svg viewBox="0 0 24 24"><use href="#ic-spk"/></svg></button>
+        <button class="icon-btn vb vb-mic" aria-label="麦克风"><svg viewBox="0 0 24 24"><use href="#ic-mic-off"/></svg></button>
+        <button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
+        <button class="btn ghost" id="btn-leave-lobby">离开</button>
+      </div>
+    </header>
+    <div class="lobby-grid">
+      <div class="panel">
+        <div class="block-head"><h2>工厂主</h2><span id="lobby-count" class="muted"></span></div>
+        <ul id="lobby-players" class="slots"></ul>
+        <div class="colors-row"><span class="muted">你的颜色</span><div id="lobby-colors" class="swatches"></div></div>
+        <div class="bot-row" id="bot-row">
+          <span class="muted">添加电脑</span>
+          <button class="btn mini" data-bot="easy" title="反应慢、常犯错">学徒</button>
+          <button class="btn mini" data-bot="normal" title="稳扎稳打">工头</button>
+          <button class="btn mini" data-bot="hard" title="精打细算">大亨</button>
+          <button class="btn mini ai-btn" data-bot="ai" title="由智谱大模型挑选行动，每步稍慢" hidden>🧠 AI 玩家</button>
+        </div>
+        <div class="opts">
+          <label><input type="checkbox" id="lobby-intro"> 入门短局（只玩运河时代，结束时额外按现金和收入计分）</label>
+        </div>
+        <div class="lobby-actions">
+          <button class="btn primary big" id="btn-start">开始游戏</button>
+          <p id="lobby-wait" class="muted"></p>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>邀请朋友</h2>
+        <div class="join-row"><input id="lobby-link" readonly aria-label="邀请链接"><button class="btn" id="btn-copy">复制链接</button></div>
+        <div class="block-head"><h2>邀请在线玩家</h2><span class="muted small" id="online-count"></span></div>
+        <ul id="online-list" class="online-list"><li class="empty">正在获取在线玩家…</li></ul>
+        <h2>聊天</h2>
+        <ul id="lobby-chat-list" class="chat-list"></ul>
+        <form id="lobby-chat-form" class="chat-form"><input id="lobby-chat-input" maxlength="200" placeholder="说点什么…" autocomplete="off" aria-label="聊天"><button class="btn">发送</button></form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 游戏 ============ -->
+<section id="screen-game" class="screen" hidden>
+  <header class="topbar" id="hud">
+    <button class="icon-btn only-narrow" id="toggle-players" aria-label="玩家与市场">☰</button>
+    <div class="era-chip" id="era-chip"></div>
+    <div id="status" class="status" aria-live="polite"></div>
+    <div class="top-btns">
+      <button class="icon-btn vb vb-spk" aria-label="扬声器"><svg viewBox="0 0 24 24"><use href="#ic-spk"/></svg></button>
+      <button class="icon-btn vb vb-mic" aria-label="麦克风"><svg viewBox="0 0 24 24"><use href="#ic-mic-off"/></svg></button>
+      <button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
+      <button class="icon-btn" id="btn-rules" aria-label="规则">?</button>
+      <button class="icon-btn" id="btn-settings" aria-label="声音设置">♪</button>
+      <button class="icon-btn only-narrow" id="toggle-side" aria-label="日志与聊天">✉<i id="drawer-badge" class="dot" hidden></i></button>
+      <button class="icon-btn" id="btn-leave" aria-label="离开">⎋</button>
+      <button class="icon-btn only-narrow" id="btn-more" aria-label="菜单">⋯</button>
+    </div>
+  </header>
+
+  <aside class="left">
+    <ul id="players" class="players"></ul>
+  </aside>
+
+  <main id="board-wrap" class="board-wrap">
+    <svg id="board" class="board-svg" role="img" aria-label="伯明翰地图"></svg>
+    <div id="hint" class="hint" hidden></div>
+    <div id="suggest" class="hint suggest" hidden></div>
+    <div id="tip" class="tip" hidden></div>
+    <div class="zoom">
+      <button class="icon-btn" id="zoom-in" aria-label="放大">+</button>
+      <button class="icon-btn" id="zoom-out" aria-label="缩小">−</button>
+      <button class="icon-btn" id="zoom-fit" aria-label="复位">⌂</button>
+    </div>
+  </main>
+
+  <aside class="right">
+    <div class="rtabs" role="tablist">
+      <button class="rtab" data-tab="log" role="tab">日志</button>
+      <button class="rtab" data-tab="chat" role="tab">聊天 <i id="chat-badge" class="badge" hidden></i></button>
+    </div>
+    <div id="pane-log" class="pane"><ul id="log" class="log"></ul></div>
+    <div id="pane-chat" class="pane" hidden>
+      <ul id="chat-list" class="chat-list"></ul>
+      <div class="emotes"><button class="emote">👍</button><button class="emote">😂</button><button class="emote">😱</button><button class="emote">🍺?</button><button class="emote">⛏️</button><button class="emote">GG</button></div>
+      <form id="chat-form" class="chat-form"><input id="chat-input" maxlength="200" placeholder="说点什么…" autocomplete="off" aria-label="聊天"><button class="btn">发送</button></form>
+    </div>
+  </aside>
+
+  <footer class="dock" id="dock">
+    <div class="hand-wrap">
+      <div class="hand-head"><span id="hand-title">手牌</span><button class="mini ghost" id="btn-mat"><svg viewBox="0 0 24 24"><use href="#a-mat"/></svg>产业板</button></div>
+      <div id="hand" class="hand"></div>
+    </div>
+    <div id="actions" class="actions"></div>
+  </footer>
+  <div id="sheet" class="sheet" hidden></div>
+</section>
+
+<div id="invite-root" aria-live="polite"></div>
+<div id="modal-root"></div>
+<div id="fx-layer" aria-hidden="true"></div>
+<div id="coach-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+<div id="ticker-root" aria-live="polite"></div>
+<div class="conn-lost">与服务器的连接已断开，正在重连…</div>
+
+<script type="module" src="/brass/js/app.js"></script>
+</body>
+</html>

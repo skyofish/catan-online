@@ -24,6 +24,7 @@ let pollTimer = null;
 const PREVIEW = [
   { id: 'catan', name: '卡坦岛', tagline: '在小岛上开拓、交易、建造，率先拿到胜利分', players: '2–8 人', minutes: '约 60 分钟' },
   { id: 'dorm', name: '猛鬼宿舍', tagline: '熄灯后猛鬼出没。躺平发育、造塔守门，活到天亮', players: '1–8 人', minutes: '约 10 分钟' },
+  { id: 'brass', name: '工业革命：伯明翰', tagline: '运河与铁路的时代：建工厂、修线路、卖货物，成为伯明翰的工业大亨', players: '2–4 人', minutes: '约 60–120 分钟' },
 ];
 
 // ---------------- 盒盖插画 ----------------
@@ -75,7 +76,37 @@ function dormArt() {
     <path d="M60 170 l6 -3 l-2 8 l9 -5 M150 186 l8 -2 l-3 6" stroke="#7a1218" stroke-width="2" fill="none" opacity=".7"/>
   </svg>`;
 }
-const ART = { catan: catanArt, dorm: dormArt };
+// 工业革命：黄昏的工业城，烟囱、运河与铁路桥上的蒸汽机车
+function brassArt() {
+  const stacks = [
+    [38, 92, 9, 56], [64, 104, 7, 44], [118, 80, 10, 70], [214, 96, 8, 52], [262, 86, 11, 62], [292, 108, 7, 40],
+  ];
+  let chim = '';
+  let smoke = '';
+  stacks.forEach(([x, y, w, h], i) => {
+    chim += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#241712"/><rect x="${x - 2}" y="${y}" width="${w + 4}" height="4" fill="#241712"/>`;
+    smoke += `<g class="smk" style="animation-delay:${(i * 0.7).toFixed(1)}s"><circle cx="${x + w / 2}" cy="${y - 8}" r="${6 + (i % 3) * 2}" fill="#8a7b70" opacity=".55"/><circle cx="${x + w / 2 + 8}" cy="${y - 20}" r="${8 + (i % 2) * 3}" fill="#9d8d80" opacity=".4"/><circle cx="${x + w / 2 + 18}" cy="${y - 34}" r="11" fill="#b0a194" opacity=".25"/></g>`;
+  });
+  return `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <defs>
+      <linearGradient id="brass-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2a3a"/><stop offset=".55" stop-color="#b8643a"/><stop offset="1" stop-color="#f0b35a"/></linearGradient>
+      <linearGradient id="brass-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a4a52"/><stop offset="1" stop-color="#1f1a22"/></linearGradient>
+    </defs>
+    <rect width="320" height="200" fill="url(#brass-sky)"/>
+    <circle cx="250" cy="120" r="26" fill="#ffd38a" opacity=".55"/>
+    ${smoke}
+    <path d="M0 150 V118 L20 108 V150 Z M70 150 V112 H110 V150 Z M132 150 V100 L152 88 L172 100 V150 Z M180 150 V116 H230 V150 Z M236 150 V104 L256 94 L276 104 V150 Z M282 150 V120 H320 V150 Z" fill="#2c1c15"/>
+    ${chim}
+    <g fill="#ffcf6b" opacity=".85"><rect x="84" y="124" width="5" height="7"/><rect x="96" y="124" width="5" height="7"/><rect x="190" y="126" width="5" height="7"/><rect x="204" y="126" width="5" height="7"/><rect x="146" y="112" width="5" height="8"/><rect x="250" y="116" width="5" height="7"/></g>
+    <rect y="150" width="320" height="50" fill="url(#brass-water)"/>
+    <path d="M0 160 Q40 156 80 160 T160 160 T240 160 T320 160" stroke="#f0b35a" stroke-width="1.2" fill="none" opacity=".45"/>
+    <path d="M0 172 Q50 168 100 172 T200 172 T320 172" stroke="#f0b35a" stroke-width="1" fill="none" opacity=".25"/>
+    <g fill="#1a110d"><path d="M20 150 H300 V146 H20 Z"/><path d="M60 150 a28 26 0 0 1 56 0 Z M150 150 a28 26 0 0 1 56 0 Z" fill="#3a2a26" opacity=".0"/></g>
+    <g class="train"><rect x="196" y="132" width="34" height="13" rx="2" fill="#1a110d"/><rect x="222" y="122" width="10" height="12" fill="#1a110d"/><rect x="200" y="126" width="6" height="8" fill="#1a110d"/><circle cx="204" cy="147" r="4" fill="#1a110d"/><circle cx="216" cy="147" r="4" fill="#1a110d"/><circle cx="228" cy="147" r="4" fill="#1a110d"/><rect x="236" y="134" width="26" height="11" rx="1" fill="#1a110d"/><circle cx="203" cy="118" r="5" fill="#d8cfc4" opacity=".6"/><circle cx="194" cy="110" r="7" fill="#d8cfc4" opacity=".4"/></g>
+    <path d="M30 186 l24 -4 l6 4 l-24 4 Z" fill="#6a3d22"/>
+  </svg>`;
+}
+const ART = { catan: catanArt, dorm: dormArt, brass: brassArt };
 
 function boxHTML(g, { preview = false } = {}) {
   const live = g.live || {};

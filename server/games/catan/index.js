@@ -201,6 +201,8 @@ module.exports = function createCatan(platform) {
   function restoreRooms() {
     let n = 0;
     for (const d of db.loadRooms()) {
+      // 同一张表里还有其他游戏（如伯明翰）的房间
+      if (d && d.kind && d.kind !== 'catan') continue;
       try {
         const room = roomFromJSON(d);
         if (!room.game && !room.board) newLobbyBoard(room);
