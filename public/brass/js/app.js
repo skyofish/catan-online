@@ -2,6 +2,7 @@ import { sound } from './audio.js';
 import { BoardView, IND_NAME, ROMAN, REGION_COLOR, MERCHANT_TYPE, isLight } from './board.js';
 import * as fx from './fx.js';
 import { Coach } from './tutorial.js';
+import { speaker } from './speech.js';
 import { Voice } from '/catan/js/voice.js';
 import { getSession, takeHashSession, api as platformApi, upgradeToHttps, goToLogin, wsUrl } from '/js/session.js';
 import { initFullscreen } from '/js/fullscreen.js';
@@ -164,6 +165,9 @@ function onMessage(t, d) {
           renderTabs();
         }
         if (d.pid) chatBubble(d);
+        // AI 玩家的台词用语音念出来，每位 AI 一个固定音色
+        const rp = S.room && S.room.players.find((p) => p.id === d.pid);
+        if (rp && rp.isBot && speaker.chatOn && !document.hidden) speaker.speak(d.text, { role: 'player', seat: S.room.players.indexOf(rp) });
       }
       break;
     case 'hint':
@@ -353,6 +357,7 @@ function renderRoomList(list) {
 async function applyRoom(d) {
   const prevRoom = S.room;
   S.room = d.room;
+  speaker.setCloud(d.room.tts);
   S.you = d.you;
   sessionStorage.setItem('brass.room', d.room.code);
   if (new URLSearchParams(location.search).get('room') !== d.room.code) history.replaceState(null, '', `?room=${d.room.code}`);
@@ -1494,7 +1499,11 @@ function openSettings() {
     <label class="row">音效音量 <input type="range" id="s-sfxv" min="0" max="1" step="0.05" value="${sound.sfxVol}"></label>
     <label class="row"><input type="checkbox" id="s-music" ${sound.musicOn ? 'checked' : ''}> 背景音乐（运河时代华尔兹 / 铁路时代进行曲）</label>
     <label class="row">音乐音量 <input type="range" id="s-musicv" min="0" max="1" step="0.05" value="${sound.musicVol}"></label>
+    <h3>语音</h3>
+    <p class="muted small">当前：${speaker.engine}${speaker.cloud ? '（智谱 GLM-TTS，接近真人）' : '（服务器没有配置智谱语音时使用）'}</p>
     <label class="row"><input type="checkbox" id="s-narrate" ${coach.narrateOn ? 'checked' : ''}> 教程语音讲解</label>
+    <label class="row"><input type="checkbox" id="s-chatv" ${speaker.chatOn ? 'checked' : ''}> 朗读 AI 玩家的台词</label>
+    <label class="row">语音音量 <input type="range" id="s-voicev" min="0" max="1" step="0.05" value="${speaker.vol}"></label>
     <label class="row"><input type="checkbox" id="s-notify"> 轮到我时发送浏览器通知</label>
     <div class="modal-actions"><button class="btn primary" data-close>完成</button></div>`,
     { cls: 'settings' }
@@ -1505,6 +1514,12 @@ function openSettings() {
   $('#s-music', root).onchange = (e) => (sound.unlock(), sound.setMusic(e.target.checked));
   $('#s-musicv', root).oninput = (e) => sound.setMusicVol(Number(e.target.value));
   $('#s-narrate', root).onchange = (e) => coach.setNarrate(e.target.checked);
+  $('#s-chatv', root).onchange = (e) => {
+    speaker.setChat(e.target.checked);
+    if (e.target.checked) speaker.speak('好的，我会把 AI 玩家说的话念出来。', { role: 'player', seat: 0, interrupt: true });
+    else speaker.stop();
+  };
+  $('#s-voicev', root).oninput = (e) => speaker.setVolume(Number(e.target.value));
   const nt = $('#s-notify', root);
   nt.checked = 'Notification' in window && Notification.permission === 'granted';
   nt.onchange = () => 'Notification' in window && Notification.requestPermission();

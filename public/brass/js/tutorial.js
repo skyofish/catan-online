@@ -1,8 +1,9 @@
 // 新手教程：导师老约翰一步步带你打完第一局的前几轮。
 // 服务器给教程房间准备了固定开局（你的手牌、商人），这里只负责引导：
-// 遮罩 + 聚光灯指向要点的地方，气泡里讲解，可选语音朗读（浏览器自带的中文语音）。
+// 遮罩 + 聚光灯指向要点的地方，气泡里讲解，可选语音朗读（智谱 GLM-TTS，没配置时用浏览器自带的中文语音）。
 // 每一步要么点「下一步」，要么等你完成指定操作（根据对局状态和事件判断），走偏了也能自动接上。
 import { sound } from './audio.js';
+import { speaker } from './speech.js';
 
 const LS = {
   get(k, d) {
@@ -32,7 +33,7 @@ export class Coach {
   setNarrate(on) {
     this.narrateOn = on;
     LS.set('brass.narrate', on);
-    if (!on && window.speechSynthesis) speechSynthesis.cancel();
+    if (!on) speaker.stop();
   }
 
   attach(S, api) {
@@ -53,7 +54,7 @@ export class Coach {
     this.active = false;
     clearInterval(this.timer);
     if (this.root) this.root.innerHTML = '';
-    if (window.speechSynthesis) speechSynthesis.cancel();
+    speaker.stop();
   }
 
   // 对局状态变化
@@ -158,6 +159,9 @@ export class Coach {
     sound.play('coach');
     this.say(text);
     this.place();
+    // 预先生成下一步的语音，翻页时不用等
+    const nxt = this.steps[this.idx + 1];
+    if (this.narrateOn && nxt && typeof nxt.text === 'string') speaker.prefetch(nxt.text, { role: 'mentor' });
   }
   prevWaitStep() {
     for (let i = this.idx - 1; i >= 0; i--) if (this.steps[i].wait) return i;
@@ -165,21 +169,8 @@ export class Coach {
   }
 
   say(html) {
-    if (!this.narrateOn || !window.speechSynthesis) return;
-    const text = html
-      .replace(/<[^>]+>/g, '')
-      .replace(/[£]/g, '英镑')
-      .replace(/[^\p{L}\p{N}，。！？、：；（）,.!?:;()\s+-]/gu, '');
-    try {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'zh-CN';
-      u.rate = 1.08;
-      u.pitch = 0.9;
-      const v = speechSynthesis.getVoices().find((x) => /zh[-_]CN/i.test(x.lang));
-      if (v) u.voice = v;
-      speechSynthesis.speak(u);
-    } catch {}
+    if (!this.narrateOn) return;
+    speaker.speak(html, { role: 'mentor', interrupt: true });
   }
 
   // 聚光灯与气泡位置

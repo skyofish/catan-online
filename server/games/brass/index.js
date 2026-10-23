@@ -240,6 +240,7 @@ module.exports = function createBrass(platform) {
       })),
       thinking: room.aiThinking || null,
       aiAvailable: ai.enabled(),
+      tts: !!(platform.tts && platform.tts.enabled()),
       spectators: room.spectators.size,
     };
   }

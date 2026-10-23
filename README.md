@@ -140,6 +140,13 @@
 
 **语音**：与卡坦岛相同的房间语音（声网或内置 WebRTC），教程房间里也能用。
 
+**AI 语音（智谱 GLM-TTS）**：配置了智谱 Key 时，导师的教程讲解和 AI 玩家在聊天里说的台词会用接近真人的语音念出来
+（导师一个音色，每位 AI 玩家按座位分配不同音色）。服务器代为调用接口（Key 不会发给浏览器），
+每句话按「文本 + 音色 + 语速」缓存成 wav 文件（`data/tts-cache/`，默认最多 300 MB），同一句只生成一次——
+教程的固定台词生成一次后就不再花钱。下一步的讲解会提前生成，翻页不用等。
+没有配置、接口出错或超时时自动改用浏览器自带的朗读。游戏内「♪」设置里可以分别开关教程讲解、AI 台词朗读，调节语音音量。
+智谱默认会给合成的语音加水印；如果在开放平台设置了去水印，语音里就不会有。
+
 **手机**：竖屏时玩家在顶部一条、手牌和行动按钮在底部，地图默认铺满可拖动（⌂ 切换整张地图 / 铺满）；
 横屏（例如全屏后）手牌在左、行动在右、中间是地图。双指缩放，确认面板从底部弹出。
 
@@ -295,6 +302,12 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=xxx npm start
 | `ZHIPU_BOT_ENABLED` | 无 | 设为 `false` 时即使有 Key 也不启用 AI 玩家 |
 | `ZHIPU_API_URL` | 智谱官方地址 | 完整的 chat/completions 接口地址 |
 | `ZHIPU_TIMEOUT_SECONDS` | `25` | 单次请求超时（秒），超时的那一步改由内置策略处理 |
+| `ZHIPU_TTS_ENABLED` | 无 | 设为 `false` 时不使用智谱语音合成（改用浏览器朗读） |
+| `ZHIPU_TTS_API_KEY` | 同 `ZHIPU_API_KEY` | 语音合成单独使用的 Key（一般不用设置） |
+| `TTS_VOICE_MENTOR` | `xiaochen` | 教程导师的音色（可选 tongtong、chuichui、xiaochen、jam、kazi、douji、luodo） |
+| `TTS_VOICE_PLAYERS` | `chuichui,tongtong,jam,kazi,douji,luodo` | AI 玩家按座位轮流使用的音色 |
+| `TTS_USER_PER_MIN` | `30` | 每位玩家每分钟最多生成几句新语音（命中缓存的不算） |
+| `TTS_CACHE_MB` | `300` | 语音缓存上限（MB），超出后删除最久没用的 |
 | `DB_PATH` | `data/catan.db` | 数据库文件位置（Docker 中为 `/app/data/catan.db`） |
 | `DORM_AFK_MS` | `15000` | 猛鬼宿舍：真人掉线多久后由电脑代管 |
 | `DORM_SPEED` | `1` | 猛鬼宿舍：对局加速倍数，仅用于测试 |
@@ -332,6 +345,7 @@ server/
   index.js   平台：HTTP、登录 / 管理员 API、在线状态、WebSocket 鉴权与路由
   db.js      SQLite 数据层（账号、会话、房间快照、各游戏战绩）
   ws.js      零依赖 WebSocket 服务端实现（RFC 6455）
+  tts.js     智谱 GLM-TTS 语音合成（服务器代调用、按句缓存、限流）
   games/catan/
     index.js   卡坦岛模块：房间、对局持久化、语音、邀请、电脑与 AI 玩家调度
     game.js    规则引擎（服务器权威，按玩家隐藏手牌）
@@ -374,6 +388,7 @@ public/
     js/fx.js      飞行的资源与金币、横幅、时代过场、烟花彩带
     js/audio.js   合成的配乐（两个时代）与工业音效
     js/tutorial.js 新手教程（聚光灯、讲解气泡、语音朗读）
+    js/speech.js  语音朗读：智谱语音优先，失败时用浏览器朗读
   dorm/
     index.html, css/style.css
     js/app.js     界面、网络、HUD 与事件编排
@@ -386,7 +401,7 @@ test/
   dorm-sim.js     猛鬼宿舍电脑对局与不变量；加参数 balance 输出各难度胜率
   dorm-socket.js  猛鬼宿舍端到端测试（随机地图、入口走位占房、搜柜子、建造、掉线代管、跨游戏邀请、战绩）
   brass-sim.js    伯明翰电脑对局（2 / 3 / 4 人与入门短局），校验牌数、万能牌、市场、运河时代每城一座等不变量
-  brass-socket.js 伯明翰端到端测试（教程、邀请、两位真人按提示打完整局、重启续玩、掉线代管、战绩）
+  brass-socket.js 伯明翰端到端测试（语音合成与缓存、教程、邀请、两位真人按提示打完整局、重启续玩、掉线代管、战绩）
 ```
 
 运行测试：`npm test`

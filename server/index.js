@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { attachWS } = require('./ws');
 const db = require('./db');
+const tts = require('./tts');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -19,6 +20,7 @@ const PLATFORM_NAME = (process.env.PLATFORM_NAME || '朋友游戏厅').trim();
 const TRUST_PROXY = !!process.env.TRUST_PROXY;
 
 db.open(DB_PATH);
+tts.init(DB_PATH);
 if (!ADMIN_USERNAME || !ADMIN_PASSWORD) console.warn('⚠️  未设置 ADMIN_USERNAME / ADMIN_PASSWORD，管理员后台无法登录。');
 
 // ======================= 基础工具 =======================
@@ -116,7 +118,7 @@ function untrackConn(conn) {
 }
 
 // ======================= 游戏模块 =======================
-const platform = { db, userConns, HttpError, requireUser };
+const platform = { db, userConns, HttpError, requireUser, tts };
 const catan = require('./games/catan')(platform);
 const dorm = require('./games/dorm')(platform);
 const brass = require('./games/brass')(platform);
@@ -220,7 +222,7 @@ const api = {
   },
   'GET /api/admin/users': async (req) => {
     requireAdmin(req);
-    return { users: db.listUsers().map((u) => ({ ...u, enabled: !!u.enabled, online: userConns.has(u.id) })), ai: catan.aiStats() };
+    return { users: db.listUsers().map((u) => ({ ...u, enabled: !!u.enabled, online: userConns.has(u.id) })), ai: catan.aiStats(), tts: tts.publicStats() };
   },
   'POST /api/admin/users': async (req) => {
     requireAdmin(req);
@@ -278,6 +280,19 @@ async function handleApi(req, res, url) {
   } catch (e) {
     if (!(e instanceof HttpError)) console.error('[api]', key, e);
     sendJSON(res, e.status || 500, { error: e instanceof HttpError ? e.message : '服务器错误' });
+  }
+}
+
+// 语音合成：返回 wav 音频（智谱 GLM-TTS，带缓存）
+async function handleTts(req, res) {
+  try {
+    const user = requireUser(req);
+    const body = await readBody(req);
+    const buf = await tts.speech(user.id, { text: body.text, role: body.role, seat: body.seat, speed: body.speed });
+    res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=86400' });
+    res.end(buf);
+  } catch (e) {
+    sendJSON(res, e.status || 500, { error: e.message || '服务器错误' });
   }
 }
 
@@ -355,6 +370,7 @@ function serveFile(req, res, file) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, dormRooms: dorm.rooms.size, brassRooms: brass.rooms.size, uptime: process.uptime() | 0 });
+  if (url.pathname === '/api/tts' && req.method === 'POST') return void handleTts(req, res);
   if (url.pathname.startsWith('/api/')) return void handleApi(req, res, url);
 
   let p;

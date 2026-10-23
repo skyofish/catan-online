@@ -10,7 +10,21 @@ const assert = require('assert');
 const PORT = 3994;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DB_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'brass-test-'));
-const ENV = { ...process.env, PORT, DB_PATH: path.join(DB_DIR, 'catan.db'), ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: 'pw', BRASS_BOT_DELAY_MS: '15', BRASS_HINT_LIMIT: '100000', AFK_TAKEOVER_MS: '400', ZHIPU_API_KEY: '' };
+// 假的智谱语音接口：记录调用次数，返回一段 wav
+const TTS_PORT = 3993;
+const ttsCalls = [];
+const ttsMock = require('http').createServer((req, res) => {
+  let body = '';
+  req.on('data', (c) => (body += c));
+  req.on('end', () => {
+    ttsCalls.push({ auth: req.headers.authorization, body: JSON.parse(body) });
+    const wav = Buffer.alloc(400, 1);
+    wav.write('RIFF', 0);
+    res.writeHead(200, { 'Content-Type': 'audio/wav' });
+    res.end(wav);
+  });
+});
+const ENV = { ...process.env, PORT, DB_PATH: path.join(DB_DIR, 'catan.db'), ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: 'pw', BRASS_BOT_DELAY_MS: '15', BRASS_HINT_LIMIT: '100000', AFK_TAKEOVER_MS: '400', ZHIPU_API_KEY: '', ZHIPU_TTS_API_KEY: 'tts-test-key', ZHIPU_TTS_URL: `http://127.0.0.1:${TTS_PORT}/api/paas/v4/audio/speech` };
 
 let srv = null;
 async function startServer(env) {
@@ -107,6 +121,7 @@ async function playUntil(clients, cond, ms = 120000) {
 
 (async () => {
   try {
+    await new Promise((r) => ttsMock.listen(TTS_PORT, '127.0.0.1', r));
     await startServer(ENV);
     const adm = (await http('POST', '/api/admin/login', { username: 'admin', password: 'pw' })).data.token;
     await http('POST', '/api/admin/users', { usernames: '阿杰 小雨 小雷' }, adm);
@@ -125,11 +140,34 @@ async function playUntil(clients, cond, ms = 120000) {
     assert.ok(map.locs.length === 22 && map.merchants.length === 5 && map.links.length > 30);
     console.log('✓ 平台目录、页面与静态资源、地图接口');
 
+    // ---------- 语音合成（智谱 GLM-TTS，带缓存） ----------
+    assert.strictEqual((await fetch(BASE + '/api/tts', { method: 'POST', body: '{}' })).status, 401, '未登录不能用语音');
+    const say = (body) => fetch(BASE + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sA }, body: JSON.stringify(body) });
+    const r1 = await say({ text: '欢迎来到<b>伯明翰</b>！Ⅰ级棉纺厂造价 £12。', role: 'mentor' });
+    assert.strictEqual(r1.status, 200);
+    assert.strictEqual(r1.headers.get('content-type'), 'audio/wav');
+    assert.ok((await r1.arrayBuffer()).byteLength >= 400);
+    assert.strictEqual(ttsCalls.length, 1);
+    assert.strictEqual(ttsCalls[0].auth, 'Bearer tts-test-key');
+    assert.strictEqual(ttsCalls[0].body.model, 'glm-tts');
+    assert.strictEqual(ttsCalls[0].body.input, '欢迎来到伯明翰！一级棉纺厂造价 12英镑。', '朗读前整理文本');
+    assert.strictEqual(ttsCalls[0].body.response_format, 'wav');
+    // 同一句话第二次走缓存，不再调用接口
+    assert.strictEqual((await say({ text: '欢迎来到<b>伯明翰</b>！Ⅰ级棉纺厂造价 £12。', role: 'mentor' })).status, 200);
+    assert.strictEqual(ttsCalls.length, 1, '命中缓存');
+    // 不同玩家座位用不同音色
+    await say({ text: '轮到我了', role: 'player', seat: 0 });
+    await say({ text: '轮到我了', role: 'player', seat: 1 });
+    assert.notStrictEqual(ttsCalls[1].body.voice, ttsCalls[2].body.voice, '不同座位不同音色');
+    assert.strictEqual((await say({ text: '   ' })).status, 400);
+    console.log('✓ 语音合成：鉴权、文本整理、角色音色、缓存');
+
     // ---------- 新手教程 ----------
     const t = await login('T', sC);
     t.send('tutorial');
     await t.wait((m) => m.t === 'room' && m.d.game);
     assert.ok(t.room.tutorial && t.room.private, '教程是私人房间');
+    assert.strictEqual(t.room.tts, true, '房间信息里告诉前端可以用智谱语音');
     assert.strictEqual(t.game.turn, t.you, '教程里你先行动');
     const hand = t.game.players.find((p) => p.id === t.you).hand;
     assert.ok(hand.some((c) => c.k === 'loc' && c.v === 'birmingham') && hand.some((c) => c.k === 'loc' && c.v === 'coventry'), '教程手牌固定');
@@ -285,6 +323,7 @@ async function playUntil(clients, cond, ms = 120000) {
     process.exitCode = 1;
   } finally {
     if (srv && srv.exitCode === null) srv.kill();
+    ttsMock.close();
     fs.rmSync(DB_DIR, { recursive: true, force: true });
   }
 })();
