@@ -25,6 +25,7 @@ const PREVIEW = [
   { id: 'catan', name: '卡坦岛', tagline: '在小岛上开拓、交易、建造，率先拿到胜利分', players: '2–8 人', minutes: '约 60 分钟' },
   { id: 'dorm', name: '猛鬼宿舍', tagline: '熄灯后猛鬼出没。躺平发育、造塔守门，活到天亮', players: '1–8 人', minutes: '约 10 分钟' },
   { id: 'brass', name: '工业革命：伯明翰', tagline: '运河与铁路的时代：建工厂、修线路、卖货物，成为伯明翰的工业大亨', players: '2–4 人', minutes: '约 60–120 分钟' },
+  { id: 'farm', name: '青野牧歌', tagline: '在风吹过的原野上开荒种地、养鸡放牛、钓鱼采集，和朋友一起经营一座农场', players: '1–8 人', minutes: '随时进出' },
 ];
 
 // ---------------- 盒盖插画 ----------------
@@ -106,15 +107,37 @@ function brassArt() {
     <path d="M30 186 l24 -4 l6 4 l-24 4 Z" fill="#6a3d22"/>
   </svg>`;
 }
-const ART = { catan: catanArt, dorm: dormArt, brass: brassArt };
+// 青野牧歌：晴空、大朵积云、绿色山坡上的红顶小屋和一片田
+function farmArt() {
+  let rows = '';
+  for (let i = 0; i < 6; i++) rows += `<path d="M${40 + i * 18} 200 L${118 + i * 10} 150" stroke="#7a5234" stroke-width="5" opacity=".55"/>`;
+  let sprouts = '';
+  for (let i = 0; i < 14; i++) sprouts += `<circle cx="${70 + (i % 7) * 13 + Math.floor(i / 7) * 6}" cy="${170 + Math.floor(i / 7) * 12 - (i % 7) * 3}" r="3.2" fill="#8fd05a"/>`;
+  return `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <defs>
+      <linearGradient id="farm-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f8ad8"/><stop offset=".7" stop-color="#bfe0f2"/></linearGradient>
+      <linearGradient id="farm-hill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ccf62"/><stop offset="1" stop-color="#6aa848"/></linearGradient>
+    </defs>
+    <rect width="320" height="200" fill="url(#farm-sky)"/>
+    <g fill="#fff" class="fcloud"><circle cx="220" cy="62" r="26"/><circle cx="248" cy="52" r="32"/><circle cx="278" cy="66" r="22"/><ellipse cx="250" cy="80" rx="52" ry="12" fill="#e2e8f4"/></g>
+    <path d="M0 120 L60 92 L110 108 L170 80 L230 104 L320 86 V200 H0 Z" fill="#8fa9c4" opacity=".8"/>
+    <path d="M0 150 C80 118 160 128 230 136 C270 140 300 132 320 128 V200 H0 Z" fill="url(#farm-hill)"/>
+    <path d="M30 200 L120 146 L190 150 L170 200 Z" fill="#9a6a44"/>
+    ${rows}${sprouts}
+    <g transform="translate(222 108)"><rect x="0" y="16" width="44" height="28" fill="#f4e6c8"/><path d="M-6 18 L22 -2 L50 18 Z" fill="#cf6a45"/><rect x="18" y="26" width="9" height="18" fill="#8a5a34"/><rect x="5" y="24" width="8" height="7" fill="#f7d58a"/><rect x="31" y="24" width="8" height="7" fill="#f7d58a"/><rect x="33" y="0" width="5" height="10" fill="#a8988a"/></g>
+    <g fill="#4f8a3f"><circle cx="290" cy="128" r="16"/><circle cx="302" cy="120" r="12" fill="#6fae4c"/><rect x="288" y="138" width="4" height="12" fill="#7a5538"/></g>
+    <g class="fgrass" stroke="#5a9a3c" stroke-width="2.5" stroke-linecap="round" fill="none"><path d="M200 196 q3 -14 -2 -24"/><path d="M210 198 q0 -16 6 -26"/><path d="M290 196 q-3 -14 2 -22"/></g>
+  </svg>`;
+}
+const ART = { catan: catanArt, dorm: dormArt, brass: brassArt, farm: farmArt };
 
 function boxHTML(g, { preview = false } = {}) {
   const live = g.live || {};
   const status = [];
-  if (live.open) status.push(`${live.open} 个房间等人加入`);
+  if (live.open) status.push(`${live.open} ${live.openLabel || '个房间等人加入'}`);
   if (live.playing) status.push(`${live.playing} 人正在玩`);
   const st = live.stats;
-  const mine = st && st.games ? `你玩过 ${st.games} 局，赢了 ${st.wins} 局` : '你还没有玩过';
+  const mine = live.mineText || (st && st.games ? `你玩过 ${st.games} 局，赢了 ${st.wins} 局` : '你还没有玩过');
   const href = live.myRoom ? `${g.path}?room=${encodeURIComponent(live.myRoom)}` : g.path;
   return `<li class="box box-${esc(g.id)} ${preview ? '' : 'playable'}">
     <div class="box-art">${(ART[g.id] || (() => ''))()}<h3 class="box-title">${esc(g.name)}</h3>${live.myRoom ? '<span class="live-badge">你的对局进行中</span>' : ''}</div>

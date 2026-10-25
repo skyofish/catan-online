@@ -126,6 +126,12 @@ button { cursor: pointer; }
 .box-dorm .box-art { background: radial-gradient(ellipse at 70% 40%, #3c1418, #160a0c 60%, #070304); }
 .box-dorm .box-title { color: #f3d7d2; text-shadow: 0 0 12px rgba(224, 38, 44, 0.8), 0 2px 0 #000; }
 .box-brass .box-art { background: #3a2a3a; }
+.box-farm .box-art { background: #8fc0e6; }
+.box-farm .box-title { color: #fffaf0; text-shadow: 0 2px 0 #3a5a2a, 0 0 14px rgba(255, 255, 255, 0.5); }
+.box-farm .fcloud { animation: farm-cloud 14s ease-in-out infinite; }
+.box-farm .fgrass path { animation: farm-sway 3s ease-in-out infinite; transform-box: fill-box; transform-origin: bottom; }
+@keyframes farm-cloud { 50% { transform: translateX(-14px); } }
+@keyframes farm-sway { 50% { transform: skewX(-10deg); } }
 .box-brass .box-title { color: #f6dfa8; font-size: 27px; text-shadow: 0 2px 0 #2a160c, 0 0 14px rgba(240, 179, 90, 0.55); }
 .box-brass .smk { animation: brass-smoke 6s ease-in-out infinite; transform-box: fill-box; }
 @keyframes brass-smoke { 0%, 100% { transform: translate(0, 0); opacity: 0.85; } 50% { transform: translate(6px, -6px); opacity: 1; } }

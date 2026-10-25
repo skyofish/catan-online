@@ -1,11 +1,11 @@
 {
   "name": "catan-online",
   "version": "1.0.0",
-  "description": "朋友游戏厅：卡坦岛、猛鬼宿舍、工业革命：伯明翰等联机游戏，账号与战绩（SQLite），零第三方依赖",
+  "description": "朋友游戏厅：卡坦岛、猛鬼宿舍、工业革命：伯明翰、青野牧歌等联机游戏，账号与战绩（SQLite），零第三方依赖",
   "main": "server/index.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
-    "test": "node test/sim.js && node test/socket.js && node test/dorm-sim.js && node test/dorm-socket.js && node test/brass-sim.js && node test/brass-socket.js"
+    "test": "node test/sim.js && node test/socket.js && node test/dorm-sim.js && node test/dorm-socket.js && node test/brass-sim.js && node test/brass-socket.js && node test/farm-sim.js && node test/farm-socket.js"
   },
   "engines": {
     "node": ">=22.13"

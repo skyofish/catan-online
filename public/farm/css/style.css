@@ -86,7 +86,7 @@ body:not([data-screen=loading]) #screen-loading { display: none; }
 .cloud.c2 { animation-duration: 90s; animation-delay: -30s; }
 .cloud.c3 { animation-duration: 75s; animation-delay: -50s; }
 @keyframes drift { from { transform: translateX(-200px); } to { transform: translateX(400px); } }
-.v-mill .blades { animation: spin 9s linear infinite; transform-origin: 0 -6px; transform-box: view-box; }
+.v-mill .blades { animation: spin 9s linear infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: 0.4; } }
 .v-grass path { animation: sway 3s ease-in-out infinite; transform-box: fill-box; transform-origin: bottom; }
@@ -240,6 +240,11 @@ body:not([data-screen=loading]) #screen-loading { display: none; }
 .row .rd { font-size: 12.5px; color: var(--muted); }
 .row .rp { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row.done { opacity: 0.55; }
+.row.shoprow { flex-wrap: wrap; }
+.row.shoprow .rm { flex: 1 1 150px; }
+@media (max-width: 520px) { .row.shoprow .rp { margin-left: 44px; } }
+.seed-ico { position: relative; display: inline-block; line-height: 1; }
+.seed-ico i { position: absolute; right: -7px; bottom: -4px; font-size: 0.5em; font-style: normal; filter: drop-shadow(0 0 1px #000); }
 .row.locked .rn::after { content: ' 🔒'; font-size: 12px; }
 .qty { display: flex; align-items: center; gap: 4px; }
 .qty button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); cursor: pointer; }
