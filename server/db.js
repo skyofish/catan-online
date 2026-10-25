@@ -90,6 +90,33 @@ function migrate() {
       COMMIT;
     `);
   }
+  if (db.prepare('PRAGMA user_version').get().user_version < 3) {
+    // 青野牧歌：农场是长期存档，不是一局一局的对局
+    db.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS farms (
+        code       TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        owner_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        public     INTEGER NOT NULL DEFAULT 0,
+        data       TEXT NOT NULL,
+        earned     INTEGER NOT NULL DEFAULT 0,
+        day_count  INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS farm_members (
+        code      TEXT NOT NULL REFERENCES farms(code) ON DELETE CASCADE,
+        user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        joined_at INTEGER NOT NULL,
+        last_at   INTEGER NOT NULL,
+        PRIMARY KEY (code, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_fm_user ON farm_members(user_id);
+      PRAGMA user_version = 3;
+      COMMIT;
+    `);
+  }
 }
 
 function prepare() {
@@ -137,6 +164,27 @@ function prepare() {
     FROM match_players mp JOIN matches m ON m.id = mp.match_id
     WHERE mp.user_id = ? AND m.game = ?
     ORDER BY m.ended_at DESC LIMIT ?`);
+  st.farmGet = db.prepare('SELECT * FROM farms WHERE code = ?');
+  st.farmUpsert = db.prepare(`INSERT INTO farms (code, name, owner_id, public, data, earned, day_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(code) DO UPDATE SET name = excluded.name, public = excluded.public, data = excluded.data, earned = excluded.earned, day_count = excluded.day_count, updated_at = excluded.updated_at`);
+  st.farmDelete = db.prepare('DELETE FROM farms WHERE code = ?');
+  st.farmMemberAdd = db.prepare(`INSERT INTO farm_members (code, user_id, joined_at, last_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(code, user_id) DO UPDATE SET last_at = excluded.last_at`);
+  st.farmMemberDel = db.prepare('DELETE FROM farm_members WHERE code = ? AND user_id = ?');
+  st.farmMemberCount = db.prepare('SELECT COUNT(*) AS n FROM farm_members WHERE code = ?');
+  st.farmsOfUser = db.prepare(`
+    SELECT f.code, f.name, f.owner_id, f.public, f.earned, f.day_count, f.updated_at, fm.last_at,
+           (SELECT COUNT(*) FROM farm_members x WHERE x.code = f.code) AS members,
+           (SELECT username FROM users u WHERE u.id = f.owner_id) AS owner
+    FROM farm_members fm JOIN farms f ON f.code = fm.code
+    WHERE fm.user_id = ? ORDER BY fm.last_at DESC LIMIT 30`);
+  st.farmBoard = db.prepare(`
+    SELECT f.code, f.name, f.earned, f.day_count, f.public,
+           (SELECT username FROM users u WHERE u.id = f.owner_id) AS owner,
+           (SELECT COUNT(*) FROM farm_members x WHERE x.code = f.code) AS members
+    FROM farms f ORDER BY f.earned DESC, f.day_count DESC LIMIT ?`);
+  st.farmUserStats = db.prepare(`SELECT COUNT(*) AS farms, COALESCE(SUM(f.earned), 0) AS earned, COALESCE(MAX(f.day_count), 0) AS days
+    FROM farm_members fm JOIN farms f ON f.code = fm.code WHERE fm.user_id = ?`);
 }
 
 const token = () => crypto.randomBytes(24).toString('base64url');
@@ -255,6 +303,37 @@ function userSummary(userId, limit = 10, game = 'catan') {
   return { stats: st.userStats.get(userId, game), recent: limit ? st.recentMatches.all(userId, game, limit) : [] };
 }
 
+// ---------------- 农场（青野牧歌） ----------------
+function getFarm(code) {
+  return st.farmGet.get(code) || null;
+}
+function saveFarm(f) {
+  const now = Date.now();
+  st.farmUpsert.run(f.code, f.name, f.ownerId || null, f.public ? 1 : 0, typeof f.data === 'string' ? f.data : JSON.stringify(f.data), Math.round(f.earned || 0), f.days || 0, f.createdAt || now, now);
+}
+function deleteFarm(code) {
+  st.farmDelete.run(code);
+}
+function addFarmMember(code, userId) {
+  const now = Date.now();
+  st.farmMemberAdd.run(code, userId, now, now);
+}
+function removeFarmMember(code, userId) {
+  st.farmMemberDel.run(code, userId);
+}
+function farmMemberCount(code) {
+  return st.farmMemberCount.get(code).n;
+}
+function farmsOfUser(userId) {
+  return st.farmsOfUser.all(userId);
+}
+function farmLeaderboard(limit = 30) {
+  return st.farmBoard.all(limit);
+}
+function farmUserStats(userId) {
+  return st.farmUserStats.get(userId);
+}
+
 function close() {
   if (db) {
     try {
@@ -284,4 +363,13 @@ module.exports = {
   recordMatch,
   leaderboard,
   userSummary,
+  getFarm,
+  saveFarm,
+  deleteFarm,
+  addFarmMember,
+  removeFarmMember,
+  farmMemberCount,
+  farmsOfUser,
+  farmLeaderboard,
+  farmUserStats,
 };

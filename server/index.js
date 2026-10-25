@@ -122,7 +122,8 @@ const platform = { db, userConns, HttpError, requireUser, tts };
 const catan = require('./games/catan')(platform);
 const dorm = require('./games/dorm')(platform);
 const brass = require('./games/brass')(platform);
-const GAMES = { catan, dorm, brass };
+const farm = require('./games/farm')(platform);
+const GAMES = { catan, dorm, brass, farm };
 
 // 玩家当前状态（供各游戏的「邀请在线玩家」列表）：idle 空闲 / room 在某个游戏的房间里 / playing 对局中
 platform.presence = (userId) => {
@@ -163,6 +164,15 @@ const CATALOG = [
     players: '2–4 人',
     minutes: '约 60–120 分钟',
     features: ['新手教程', '内置电脑与 AI 玩家', '房间语音'],
+  },
+  {
+    id: 'farm',
+    name: '青野牧歌',
+    path: '/farm/',
+    tagline: '在风吹过的原野上开荒种地、养鸡放牛、钓鱼采集，和朋友一起经营一座农场',
+    players: '1–8 人',
+    minutes: '随时进出',
+    features: ['3D 手绘风原野', '四季与天气', '农场长期存档', '手机可玩'],
   },
 ];
 
@@ -306,6 +316,7 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.json': 'application/json',
   '.webmanifest': 'application/manifest+json',
+  '.mjs': 'text/javascript; charset=utf-8',
 };
 const gzCache = new Map();
 const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -369,7 +380,7 @@ function serveFile(req, res, file) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, dormRooms: dorm.rooms.size, brassRooms: brass.rooms.size, uptime: process.uptime() | 0 });
+  if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, dormRooms: dorm.rooms.size, brassRooms: brass.rooms.size, farms: farm.rooms.size, uptime: process.uptime() | 0 });
   if (url.pathname === '/api/tts' && req.method === 'POST') return void handleTts(req, res);
   if (url.pathname.startsWith('/api/')) return void handleApi(req, res, url);
 
@@ -399,8 +410,8 @@ const server = http.createServer((req, res) => {
 });
 
 // ======================= WebSocket =======================
-// /hub/ws：平台大厅（在线状态、接收邀请）；/catan/ws：卡坦岛；/dorm/ws：猛鬼宿舍；/brass/ws：工业革命：伯明翰；/ws：旧版卡坦岛地址
-const WS_ROUTES = { '/hub/ws': null, '/catan/ws': catan, '/dorm/ws': dorm, '/brass/ws': brass, '/ws': catan };
+// /hub/ws：平台大厅（在线状态、接收邀请）；/catan/ws：卡坦岛；/dorm/ws：猛鬼宿舍；/brass/ws：工业革命：伯明翰；/farm/ws：青野牧歌；/ws：旧版卡坦岛地址
+const WS_ROUTES = { '/hub/ws': null, '/catan/ws': catan, '/dorm/ws': dorm, '/brass/ws': brass, '/farm/ws': farm, '/ws': catan };
 
 const platformHandlers = {
   hello(conn, d) {
