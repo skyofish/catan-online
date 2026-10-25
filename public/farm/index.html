@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>青野牧歌 - {{PLATFORM_NAME}}</title>
+<meta name="description" content="青野牧歌：在风吹过的原野上开荒种地、养鸡放牛、钓鱼采集，和朋友一起经营一座农场。">
+<meta name="theme-color" content="#1d3a3a">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="游戏厅">
+<link rel="apple-touch-icon" href="/favicon.svg">
+<link rel="modulepreload" href="/farm/vendor/three.core.min.js">
+<link rel="modulepreload" href="/farm/vendor/three.module.min.js">
+<link rel="stylesheet" href="/farm/css/style.css">
+</head>
+<body data-screen="loading">
+
+<!-- ============ 首页 ============ -->
+<section id="screen-home" class="screen" hidden>
+  <div class="vista" aria-hidden="true">
+    <svg class="vista-svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <linearGradient id="v-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#5d8fc9"/><stop offset=".55" stop-color="#a9cde0"/><stop offset=".8" stop-color="#f3dcb2"/><stop offset="1" stop-color="#f6c48e"/>
+        </linearGradient>
+        <radialGradient id="v-sun" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff6dc"/><stop offset=".3" stop-color="#ffe7b0" stop-opacity=".8"/><stop offset="1" stop-color="#ffd590" stop-opacity="0"/></radialGradient>
+        <linearGradient id="v-m1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fa9c4"/><stop offset="1" stop-color="#b9cbd6"/></linearGradient>
+        <linearGradient id="v-m2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6f8fa0"/><stop offset="1" stop-color="#93aeb3"/></linearGradient>
+        <linearGradient id="v-h1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fae6a"/><stop offset="1" stop-color="#5f9156"/></linearGradient>
+        <linearGradient id="v-h2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a5c46a"/><stop offset="1" stop-color="#7aa752"/></linearGradient>
+        <linearGradient id="v-h3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bcd474"/><stop offset="1" stop-color="#93b85a"/></linearGradient>
+      </defs>
+      <rect width="1600" height="900" fill="url(#v-sky)"/>
+      <circle cx="1180" cy="520" r="260" fill="url(#v-sun)"/>
+      <g class="v-clouds" fill="#fff" opacity=".92">
+        <g class="cloud c1"><ellipse cx="260" cy="190" rx="120" ry="34"/><ellipse cx="320" cy="170" rx="80" ry="40"/><ellipse cx="200" cy="180" rx="60" ry="28"/></g>
+        <g class="cloud c2"><ellipse cx="900" cy="230" rx="170" ry="44"/><circle cx="860" cy="190" r="56"/><circle cx="930" cy="160" r="74"/><circle cx="1010" cy="196" r="52"/><ellipse cx="920" cy="250" rx="150" ry="22" fill="#dfe8f2"/></g>
+        <g class="cloud c3"><ellipse cx="1350" cy="250" rx="110" ry="24"/><ellipse cx="1400" cy="236" rx="60" ry="26"/></g>
+      </g>
+      <path d="M0 560 L120 470 L210 520 L330 400 L420 470 L520 430 L640 520 L760 380 L860 300 L940 360 L1040 420 L1160 350 L1280 430 L1400 390 L1500 450 L1600 410 V900 H0 Z" fill="url(#v-m1)"/>
+      <path d="M840 318 L860 300 L880 316 L870 322 L860 314 L850 326 Z" fill="#f4f7fa" opacity=".9"/>
+      <path d="M0 620 L160 560 L300 600 L420 540 L560 590 L700 560 L860 610 L1000 570 L1160 620 L1320 580 L1480 620 L1600 600 V900 H0 Z" fill="url(#v-m2)" opacity=".95"/>
+      <g class="v-mill" transform="translate(1250 560)">
+        <path d="M-12 60 L-6 -6 L6 -6 L12 60 Z" fill="#efe2c4"/><path d="M-10 -4 L0 -18 L10 -4 Z" fill="#c4573a"/>
+        <g class="blades"><rect x="-2" y="-46" width="4" height="40" fill="#7a5234"/><rect x="-2" y="-6" width="4" height="40" fill="#7a5234" transform="rotate(90 0 -6)"/><rect x="-2" y="-6" width="4" height="40" fill="#7a5234"/><rect x="-2" y="-46" width="4" height="40" fill="#7a5234" transform="rotate(90 0 -6)"/></g>
+      </g>
+      <path d="M0 700 C200 640 380 660 560 690 C760 720 940 650 1120 660 C1300 670 1460 700 1600 680 V900 H0 Z" fill="url(#v-h1)"/>
+      <path d="M0 770 C220 720 420 740 640 770 C860 800 1060 740 1260 750 C1420 758 1520 780 1600 770 V900 H0 Z" fill="url(#v-h2)"/>
+      <g fill="#4f7d4a">
+        <path d="M150 700 l18 -60 l18 60 Z"/><path d="M178 706 l14 -46 l14 46 Z"/><path d="M1380 690 l20 -66 l20 66 Z"/><path d="M1410 700 l14 -44 l14 44 Z"/>
+        <ellipse cx="560" cy="676" rx="34" ry="30"/><rect x="556" y="690" width="8" height="22" fill="#6b4a32"/>
+      </g>
+      <g class="v-house">
+        <rect x="910" y="700" width="90" height="56" fill="#efe2c4"/>
+        <path d="M898 704 L955 662 L1012 704 Z" fill="#c4573a"/>
+        <rect x="944" y="722" width="20" height="34" fill="#7a5234"/>
+        <rect x="918" y="716" width="16" height="14" fill="#f7d58a" class="win"/>
+        <rect x="976" y="716" width="16" height="14" fill="#f7d58a" class="win"/>
+        <rect x="984" y="668" width="10" height="24" fill="#8c6a52"/>
+      </g>
+      <path d="M0 840 C260 800 520 815 800 840 C1080 865 1340 820 1600 830 V900 H0 Z" fill="url(#v-h3)"/>
+      <g class="v-grass" stroke="#6f9a46" stroke-width="3" stroke-linecap="round" fill="none">
+        <path d="M80 880 q6 -26 -4 -44"/><path d="M96 884 q2 -30 12 -48"/><path d="M300 870 q-4 -24 6 -40"/><path d="M1200 876 q4 -26 -6 -42"/><path d="M1220 880 q0 -30 10 -46"/><path d="M1500 872 q-6 -24 4 -40"/>
+      </g>
+    </svg>
+    <div class="wind w1"></div><div class="wind w2"></div><div class="wind w3"></div>
+  </div>
+  <header class="home-head">
+    <a class="back-link" href="/">← 游戏大厅</a>
+    <span class="head-right"><span class="me" id="me-name"></span><button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button></span>
+  </header>
+  <main class="home-main">
+    <h1 class="title">青野牧歌</h1>
+    <p class="subtitle">风吹过原野的时候，种下第一颗种子。</p>
+
+    <div class="panel home-card">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="farms" role="tab">我的农场</button>
+        <button class="tab" data-tab="open" role="tab">串门</button>
+        <button class="tab" data-tab="board" role="tab">排行</button>
+        <button class="tab" data-tab="help" role="tab">怎么玩</button>
+      </div>
+
+      <div class="tab-pane" data-pane="farms">
+        <ul class="farm-list" id="farm-list"><li class="muted">正在翻找地契…</li></ul>
+        <form class="create" id="create-form">
+          <input id="create-name" maxlength="20" placeholder="给新农场起个名字" aria-label="农场名">
+          <label class="check"><input type="checkbox" id="create-public"> 允许别人串门</label>
+          <button class="btn primary" type="submit">开垦新农场</button>
+        </form>
+        <form class="join-form" id="join-form">
+          <input id="join-code" maxlength="5" placeholder="朋友的农场编号" aria-label="农场编号" autocapitalize="characters">
+          <button class="btn" type="submit">去帮忙</button>
+        </form>
+      </div>
+
+      <div class="tab-pane" data-pane="open" hidden><ul class="farm-list" id="open-list"></ul></div>
+      <div class="tab-pane" data-pane="board" hidden><div id="leaderboard" class="board"></div></div>
+      <div class="tab-pane help" data-pane="help" hidden>
+        <ol>
+          <li><b>移动</b>：手机上按住屏幕左半边拖动摇杆；电脑用 WASD 或方向键。点地面也能走过去。</li>
+          <li><b>工具</b>：底部是快捷栏，点一下拿在手上，按右下角的大按钮用在面前那一格（电脑按空格）。也可以直接点身边的格子。</li>
+          <li><b>种地</b>：锄头翻地 → 播种 → 每天用水壶浇水（池塘边打水），下雨天不用浇。成熟后点一下收获。作物只能在自己的季节生长，换季会枯死。</li>
+          <li><b>赚钱</b>：把东西放进屋旁的<em>出货箱</em>，第二天早上结算，钱是全农场共用的。</li>
+          <li><b>开荒</b>：斧头砍树得木材，镐子敲石头，镰刀割草（会存成干草）。遗迹旁的<em>古代矿石</em>可以做洒水器。</li>
+          <li><b>动物</b>：在行商阿青那里盖鸡舍、畜棚，再买鸡、奶牛、绵羊。每天摸摸它们、收蛋和奶。冬天和雨天要备干草。</li>
+          <li><b>钓鱼</b>：拿钓竿对着水按大按钮抛竿，看到「！」立刻点，然后按住屏幕让绿条跟住鱼。</li>
+          <li><b>体力与睡觉</b>：用工具会消耗体力（角色旁边的绿色圆环）。回家门口睡觉进入第二天；凌晨 2 点还在外面会累倒。所有在线的人都睡下，天就亮了。</li>
+          <li><b>古代祭坛</b>：东北角的遗迹里有六根石柱，交齐供品能唤醒它们，全部唤醒有大奖励。</li>
+        </ol>
+        <p class="muted">农场会一直保存，叫朋友输入农场编号就能一起种地。有人在线时时间才会流动。</p>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- ============ 游戏 ============ -->
+<section id="screen-game" class="screen" hidden>
+  <canvas id="stage"></canvas>
+
+  <div class="hud-top">
+    <div class="hud-clock panel" id="hud-clock">
+      <div class="dial" id="dial"><i class="sun-moon" id="sun-moon"></i></div>
+      <div class="clock-text">
+        <div class="date" id="hud-date">春 1 日</div>
+        <div class="time"><b id="hud-time">6:00</b><span class="wx" id="hud-wx">☀</span></div>
+      </div>
+      <div class="gold" id="hud-gold"><i class="coin"></i><b>500</b></div>
+    </div>
+    <div class="hud-right">
+      <button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
+      <button class="icon-btn" id="btn-chat" aria-label="聊天">💬<em id="chat-badge" hidden></em></button>
+      <button class="icon-btn" id="btn-menu" aria-label="菜单">☰</button>
+    </div>
+  </div>
+  <div class="energy-mini" id="energy-mini" aria-label="体力"><i id="energy-fill"></i><span id="energy-text"></span></div>
+
+  <div class="stamina" id="stamina" hidden>
+    <svg viewBox="0 0 40 40"><circle class="bg" cx="20" cy="20" r="15"/><circle class="fg" id="stamina-arc" cx="20" cy="20" r="15"/></svg>
+  </div>
+  <div class="water-gauge" id="water-gauge" hidden><i id="water-fill"></i></div>
+
+  <div class="toasts" id="game-toasts" aria-live="polite"></div>
+  <div class="item-pops" id="item-pops"></div>
+  <div class="bite" id="bite" hidden>！</div>
+
+  <div class="joy-zone" id="joy-zone"></div>
+  <div class="joy" id="joy" hidden><div class="joy-knob" id="joy-knob"></div></div>
+
+  <div class="hotbar panel" id="hotbar"></div>
+  <div class="actions">
+    <button class="act-btn ctx" id="btn-ctx" hidden><span class="ico" id="ctx-ico">✋</span><span class="lbl" id="ctx-lbl">收获</span></button>
+    <button class="act-btn use" id="btn-use"><span class="ico" id="use-ico">⛏</span><span class="lbl" id="use-lbl">使用</span></button>
+    <button class="act-btn bag" id="btn-bag" aria-label="背包">🎒</button>
+  </div>
+
+  <div class="fishing" id="fishing" hidden>
+    <div class="fish-bar">
+      <div class="fish-zone" id="fish-zone"></div>
+      <div class="fish-icon" id="fish-icon">🐟</div>
+    </div>
+    <div class="fish-progress"><i id="fish-progress"></i></div>
+    <p class="fish-hint">按住屏幕，让绿条跟住鱼</p>
+  </div>
+
+  <div class="sheet panel" id="sheet" hidden></div>
+  <div class="sheet-shade" id="sheet-shade" hidden></div>
+
+  <aside class="drawer panel" id="drawer" hidden>
+    <div class="drawer-head"><b id="drawer-title">农场</b><button class="icon-btn" data-close-drawer aria-label="关闭">✕</button></div>
+    <div class="drawer-body" id="drawer-body"></div>
+    <div class="chat" id="game-chat"></div>
+    <div class="emotes" id="emotes"></div>
+    <form class="chat-form" id="chat-form"><input maxlength="200" placeholder="说点什么…" aria-label="聊天"><button class="btn small">发送</button></form>
+  </aside>
+
+  <div class="dayend" id="dayend" hidden></div>
+</section>
+
+<div class="screen loading" id="screen-loading"><div class="loading-leaf"></div><p>风正吹过原野…</p></div>
+
+<div id="invite-root" aria-live="polite"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<script type="module" src="/farm/js/app.js"></script>
+</body>
+</html>
