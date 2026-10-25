@@ -1062,7 +1062,7 @@ class FarmWorld {
       if (!f) continue;
       if (f.st === 'wait' && this.t >= f.at) {
         f.st = 'bite';
-        f.until = this.t + 1.4;
+        f.until = this.t + 2.0;
         this.events.push({ type: 'bite', pid: k });
       } else if (f.st === 'bite' && this.t > f.until) {
         f.st = 'wait';
