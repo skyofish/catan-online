@@ -593,7 +593,12 @@ module.exports = function createHunt(platform) {
       if (!r.ok && d.type !== 'move' && d.type !== 'use' && d.type !== 'qte') throw new Error(r.error);
     },
 
-        chat(conn, d) {
+        // 客户端测往返延迟用：原样送回
+    ping(conn, d) {
+      conn.send({ t: 'pong', d: { c: Number(d.c) || 0 } });
+    },
+
+    chat(conn, d) {
       const { room, me } = ctx(conn);
       const now = Date.now();
       conn.chatTimes = (conn.chatTimes || []).filter((t) => now - t < 10000);
@@ -679,7 +684,7 @@ module.exports = function createHunt(platform) {
     summary,
     presence,
     shutdown,
-    rateKey: (t) => (t === 'act' ? 'act' : null),
+    rateKey: (t) => (t === 'act' || t === 'ping' ? 'act' : null),
     rooms,
   };
 };
