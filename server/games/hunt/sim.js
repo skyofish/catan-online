@@ -857,6 +857,9 @@ class HuntGame {
           ai: a && a.id !== undefined ? a.id : null,
           stun: p.stun > t ? r2(p.stun - t) : 0,
           cd: p.cd > t ? r2(p.cd - t) : 0,
+          // 结束时刻（对局时间）：增量协议只发这两个，客户端自己算剩余时间，不用每一帧都发倒计时
+          stunE: p.stun > t ? r2(p.stun) : 0,
+          cdE: p.cd > t ? r2(p.cd) : 0,
           v: r2(this.speedOf(p)),
         };
         if (p.role === 'survivor') {
@@ -879,7 +882,7 @@ class HuntGame {
         }
         return o;
       }),
-      machines: this.machines.map((m) => [Math.round(m.p * 1000) / 1000, m.done ? 1 : 0, m.lastAt > t - 0.3 ? 1 : 0]),
+      machines: this.machines.map((m) => [Math.round(m.p * 200) / 200, m.done ? 1 : 0, m.lastAt > t - 0.3 ? 1 : 0]),
       pallets: this.pallets.map((p) => p.st).join(''),
       gates: this.gates.map((g) => [r2(g.p), g.open ? 1 : 0]),
       cages: this.cages.map((c) => c.who),
