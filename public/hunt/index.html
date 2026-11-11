@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>雾夜追猎 - {{PLATFORM_NAME}}</title>
+<meta name="description" content="雾夜追猎：一名追猎者对四名求生者的 3D 非对称对抗。修好发报机、打开大门，在雾里逃出生天。">
+<meta name="theme-color" content="#0d1420">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="游戏厅">
+<link rel="apple-touch-icon" href="/favicon.svg">
+<link rel="modulepreload" href="/farm/vendor/three.core.min.js">
+<link rel="modulepreload" href="/farm/vendor/three.module.min.js">
+<link rel="stylesheet" href="/hunt/css/style.css">
+</head>
+<body data-screen="loading">
+
+<!-- ============ 首页 ============ -->
+<section id="screen-home" class="screen" hidden>
+  <div class="home-bg" aria-hidden="true"><div class="moon"></div><div class="fog f1"></div><div class="fog f2"></div><div class="tent"></div></div>
+  <header class="home-head">
+    <a class="back-link" href="/">← 游戏大厅</a>
+    <span class="head-right"><span class="me" id="me-name"></span><button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button></span>
+  </header>
+  <div class="home-main">
+    <h1 class="title">雾夜追猎</h1>
+    <p class="subtitle">雾起来的时候，别回头。<br>修好发报机，打开大门——或者，做那个追的人。</p>
+
+    <div class="home-card">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="rooms" role="tab">房间</button>
+        <button class="tab" data-tab="me" role="tab">我的战绩</button>
+        <button class="tab" data-tab="board" role="tab">排行榜</button>
+        <button class="tab" data-tab="help" role="tab">怎么玩</button>
+      </div>
+
+      <div class="tab-pane" data-pane="rooms">
+        <div class="create">
+          <div class="row">
+            <input id="create-title" maxlength="20" placeholder="房间名（可不填）" aria-label="房间名">
+            <label class="check"><input type="checkbox" id="create-private"> 私密</label>
+          </div>
+          <div class="row">
+            <button class="btn gold" id="btn-create">开一局</button>
+            <form class="join-form" id="join-form">
+              <input id="join-code" maxlength="5" placeholder="房间号" aria-label="房间号" autocapitalize="characters">
+              <button class="btn dark" type="submit">进入</button>
+            </form>
+          </div>
+        </div>
+        <ul class="room-list" id="room-list"></ul>
+      </div>
+
+      <div class="tab-pane" data-pane="me" hidden><div id="me-stats" class="stats"></div></div>
+      <div class="tab-pane" data-pane="board" hidden><div id="leaderboard" class="stats"></div></div>
+      <div class="tab-pane help" data-pane="help" hidden>
+        <ol>
+          <li><b>阵营</b>：每局 1 名<em>追猎者</em>对 4 名<em>求生者</em>。真人不够时空位由电脑补上，也可以加智谱 AI。</li>
+          <li><b>求生者</b>：场上有 7 台<em>发报机</em>（头顶有光柱），修好其中 5 台，两扇<em>大门</em>就会通电；去门边的电闸拉 16 秒把门打开，跑出去就算逃脱。修机时会跳出<em>校准</em>，指针转到亮区时按下；按错会炸机、掉进度，还会暴露位置。</li>
+          <li><b>受伤与倒地</b>：挨一刀受伤（会短暂加速），再挨一刀倒地。<em>正在修机、翻窗、救人、治疗时挨刀会直接倒地</em>。队友可以把受伤、倒地的人治好。</li>
+          <li><b>铁笼</b>：追猎者会把倒地的人扛起来关进铁笼。笼里的计时走满就淘汰；被救下来后第二次进笼从一半开始，第三次直接淘汰。走到笼边按「救人」。</li>
+          <li><b>板与窗</b>：求生者可以翻窗、放倒木板。木板砸中追猎者会让他眩晕；追猎者翻窗很慢，过不了倒下的木板，只能花时间砸掉。</li>
+          <li><b>追猎者</b>：出刀命中后要擦刀，打空也有硬直。打倒 → 扛起 → 关笼。心跳声越响，说明追猎者离求生者越近。</li>
+          <li><b>地窖</b>：只剩最后一名求生者、且已修好 2 台时，地窖会打开，跳进去也算逃脱。</li>
+          <li><b>胜负</b>：逃脱 3 人以上求生者胜，2 人平局，1 人以下追猎者胜。</li>
+        </ol>
+        <p class="muted">手机：左下摇杆移动，滑动屏幕转镜头，右下是互动 / 技能 / 出刀。电脑：WASD 移动，拖动鼠标转镜头，空格或 E 互动，Q 技能，J 或鼠标左键出刀。</p>
+        <div id="codex"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 房间 ============ -->
+<section id="screen-lobby" class="screen" hidden>
+  <header class="bar">
+    <button class="btn ghost small" id="btn-leave-lobby">← 离开</button>
+    <div class="bar-title"><b id="lobby-title"></b><span class="code" id="lobby-code" title="点击复制邀请链接"></span></div>
+    <button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
+    <button class="icon-btn" id="btn-sound-lobby" aria-label="声音">♪</button>
+  </header>
+  <div class="lobby-body">
+    <div class="lobby-col">
+      <h3>地图</h3>
+      <div class="map-pick" id="lobby-map"></div>
+      <h3>追猎者</h3>
+      <ul class="slots" id="slots-hunter"></ul>
+      <h3>求生者 <small id="lobby-count"></small></h3>
+      <ul class="slots" id="slots-survivor"></ul>
+      <div class="bot-row" id="bot-row">
+        <span>加电脑：</span>
+        <select id="bot-level" aria-label="电脑水平"><option value="easy">菜鸟</option><option value="normal" selected>老手</option><option value="hard">大神</option><option value="ai" id="bot-ai" hidden>智谱 AI</option></select>
+        <button class="btn dark small" data-bot="survivor">＋求生者</button>
+        <button class="btn dark small" data-bot="hunter">＋追猎者</button>
+      </div>
+      <div class="lobby-actions">
+        <button class="btn dark" id="btn-invite">邀请在线玩家</button>
+        <button class="btn gold big" id="btn-start">开始</button>
+      </div>
+      <p class="muted" id="lobby-hint"></p>
+    </div>
+    <div class="lobby-col">
+      <h3>我的角色</h3>
+      <div class="chars" id="char-pick"></div>
+      <h3>聊天</h3>
+      <div class="chat" id="lobby-chat"></div>
+      <form class="chat-form" data-chat><input maxlength="200" placeholder="说点什么…" aria-label="聊天"><button class="btn dark small">发送</button></form>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 对局 ============ -->
+<section id="screen-game" class="screen" hidden>
+  <canvas id="stage"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="danger" id="danger" aria-hidden="true"></div>
+  <div class="flash" id="flash" aria-hidden="true"></div>
+
+  <div class="hud-top">
+    <div class="hud-obj" id="hud-obj"></div>
+    <div class="hud-team" id="hud-team"></div>
+    <div class="hud-right">
+      <button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
+      <button class="icon-btn" id="btn-chat" aria-label="聊天">💬<em id="chat-badge" hidden></em></button>
+      <button class="icon-btn" id="btn-menu" aria-label="菜单">☰</button>
+    </div>
+  </div>
+  <div class="banner" id="banner" hidden></div>
+  <div class="feed" id="feed"></div>
+  <div class="spectate" id="spectate" hidden></div>
+
+  <div class="progress" id="progress" hidden><span id="progress-label"></span><div class="pbar"><i id="progress-bar"></i></div></div>
+  <div class="qte" id="qte" hidden>
+    <svg viewBox="-60 -60 120 120"><circle r="46" class="q-ring"/><path id="qte-zone" class="q-zone"/><line id="qte-needle" x1="0" y1="0" x2="0" y2="-50" class="q-needle"/><circle r="5" class="q-hub"/></svg>
+    <span>校准！点这里 / 空格</span>
+  </div>
+
+  <div class="stick" id="stick"><i id="stick-knob"></i></div>
+  <div class="pad" id="pad">
+    <button class="act skill" id="btn-skill"><b id="skill-name">技能</b><small id="skill-cd"></small><i id="skill-mask"></i></button>
+    <button class="act attack" id="btn-attack" hidden><b>出刀</b></button>
+    <button class="act use" id="btn-use" disabled><b id="use-label">互动</b></button>
+  </div>
+
+  <aside class="drawer" id="drawer" hidden>
+    <div class="drawer-head"><b>聊天</b><button class="icon-btn" data-close-drawer aria-label="关闭">✕</button></div>
+    <div class="chat" id="game-chat"></div>
+    <form class="chat-form" data-chat><input maxlength="200" placeholder="说点什么…" aria-label="聊天"><button class="btn dark small">发送</button></form>
+  </aside>
+
+  <div class="intro" id="intro" hidden></div>
+  <div class="end" id="end" hidden></div>
+</section>
+
+<div id="modal-root" hidden></div>
+<div id="invite-root"></div>
+<div id="toast-root"></div>
+<div class="loading" id="loading">雾正在聚拢…</div>
+
+<script type="module" src="/hunt/js/app.js"></script>
+</body>
+</html>

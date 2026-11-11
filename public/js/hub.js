@@ -26,6 +26,7 @@ const PREVIEW = [
   { id: 'dorm', name: '猛鬼宿舍', tagline: '熄灯后猛鬼出没。躺平发育、造塔守门，活到天亮', players: '1–8 人', minutes: '约 10 分钟' },
   { id: 'brass', name: '工业革命：伯明翰', tagline: '运河与铁路的时代：建工厂、修线路、卖货物，成为伯明翰的工业大亨', players: '2–4 人', minutes: '约 60–120 分钟' },
   { id: 'farm', name: '青野牧歌', tagline: '在风吹过的原野上开荒种地、养鸡放牛、钓鱼采集，和朋友一起经营一座农场', players: '1–8 人', minutes: '随时进出' },
+  { id: 'hunt', name: '雾夜追猎', tagline: '一名追猎者，四名求生者。修好发报机、打开大门，在雾里逃出生天', players: '1–5 人', minutes: '约 6 分钟' },
 ];
 
 // ---------------- 盒盖插画 ----------------
@@ -129,7 +130,27 @@ function farmArt() {
     <g class="fgrass" stroke="#5a9a3c" stroke-width="2.5" stroke-linecap="round" fill="none"><path d="M200 196 q3 -14 -2 -24"/><path d="M210 198 q0 -16 6 -26"/><path d="M290 196 q-3 -14 2 -22"/></g>
   </svg>`;
 }
-const ART = { catan: catanArt, dorm: dormArt, brass: brassArt, farm: farmArt };
+// 雾夜追猎：雾里的月亮、马戏团大篷的剪影、一盏发报机的灯，远处一双眼睛
+function huntArt() {
+  return `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <defs>
+      <linearGradient id="hunt-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1420"/><stop offset=".6" stop-color="#24364a"/><stop offset="1" stop-color="#4a5c66"/></linearGradient>
+      <radialGradient id="hunt-moon" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#f4f0dc"/><stop offset=".3" stop-color="#d8dcc8" stop-opacity=".7"/><stop offset="1" stop-color="#9ab0b8" stop-opacity="0"/></radialGradient>
+      <radialGradient id="hunt-lamp" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffe6a0"/><stop offset=".4" stop-color="#f0b040" stop-opacity=".5"/><stop offset="1" stop-color="#f0b040" stop-opacity="0"/></radialGradient>
+    </defs>
+    <rect width="320" height="200" fill="url(#hunt-sky)"/>
+    <circle cx="236" cy="54" r="58" fill="url(#hunt-moon)"/><circle cx="236" cy="54" r="20" fill="#f1eeda"/>
+    <g fill="#141c26"><path d="M20 150 L78 78 L136 150 Z"/><path d="M76 80 l2 -22 l2 22 Z"/><path d="M78 58 l14 5 l-14 5 Z" fill="#7a2c34"/>
+      <path d="M150 150 L176 112 L202 150 Z" opacity=".8"/><rect x="262" y="96" width="5" height="60"/><path d="M250 100 h30 v4 h-30 Z"/></g>
+    <path d="M0 150 C80 140 200 146 320 138 V200 H0 Z" fill="#0c1218"/>
+    <g class="hfog" fill="#b8c8cc" opacity=".16"><ellipse cx="90" cy="150" rx="120" ry="14"/><ellipse cx="250" cy="162" rx="110" ry="12"/></g>
+    <g transform="translate(118 150)"><rect x="-9" y="-12" width="18" height="12" fill="#3a2a1c"/><rect x="-1" y="-40" width="2" height="28" fill="#6a5a3a"/><circle cx="0" cy="-42" r="14" fill="url(#hunt-lamp)" class="hlamp"/><circle cx="0" cy="-42" r="3" fill="#ffe9a8"/></g>
+    <g transform="translate(96 150)" fill="#0a0e14"><circle cx="0" cy="-22" r="6"/><path d="M-5 -16 h10 l2 16 h-14 Z"/></g>
+    <g class="heyes" fill="#ff5a3a"><circle cx="286" cy="118" r="2.2"/><circle cx="296" cy="118" r="2.2"/></g>
+    <path d="M276 150 q4 -40 16 -44 q12 4 14 44 Z" fill="#0a0e14"/>
+  </svg>`;
+}
+const ART = { catan: catanArt, dorm: dormArt, brass: brassArt, farm: farmArt, hunt: huntArt };
 
 function boxHTML(g, { preview = false } = {}) {
   const live = g.live || {};
