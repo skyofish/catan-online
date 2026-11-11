@@ -124,7 +124,6 @@
     <div class="hud-obj" id="hud-obj"></div>
     <div class="hud-team" id="hud-team"></div>
     <div class="hud-right">
-      <button class="icon-btn" type="button" data-fullscreen aria-label="全屏"></button>
       <button class="icon-btn" id="btn-chat" aria-label="聊天">💬<em id="chat-badge" hidden></em></button>
       <button class="icon-btn" id="btn-menu" aria-label="菜单">☰</button>
     </div>
@@ -136,15 +135,16 @@
   <div class="progress" id="progress" hidden><span id="progress-label"></span><div class="pbar"><i id="progress-bar"></i></div></div>
   <div class="qte" id="qte" hidden>
     <svg viewBox="-60 -60 120 120"><circle r="46" class="q-ring"/><path id="qte-zone" class="q-zone"/><line id="qte-needle" x1="0" y1="0" x2="0" y2="-50" class="q-needle"/><circle r="5" class="q-hub"/></svg>
-    <span>校准！点这里 / 空格</span>
+    <span>指针进亮区时按右下的键</span>
   </div>
 
   <div class="stick" id="stick"><i id="stick-knob"></i></div>
   <div class="pad" id="pad">
-    <button class="act skill" id="btn-skill"><b id="skill-name">技能</b><small id="skill-cd"></small><i id="skill-mask"></i></button>
-    <button class="act attack" id="btn-attack" hidden><b>出刀</b></button>
-    <button class="act use" id="btn-use" disabled><b id="use-label">互动</b></button>
+    <button class="act a-skill" id="btn-skill" aria-label="技能"><span class="ico" id="skill-ico"></span><b id="skill-name">技能</b><small id="skill-cd"></small><kbd>Q</kbd></button>
+    <button class="act a-use" id="btn-use" aria-label="互动"><span class="ico" id="use-ico"></span><b id="use-label">互动</b><kbd>E</kbd></button>
+    <button class="act a-attack" id="btn-attack" aria-label="出刀" hidden><span class="ico" id="attack-ico"></span><b>出刀</b><kbd>J</kbd></button>
   </div>
+  <div class="fps" id="fps" hidden></div>
 
   <aside class="drawer" id="drawer" hidden>
     <div class="drawer-head"><b>聊天</b><button class="icon-btn" data-close-drawer aria-label="关闭">✕</button></div>
