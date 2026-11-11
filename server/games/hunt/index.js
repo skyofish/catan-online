@@ -109,16 +109,75 @@ module.exports = function createHunt(platform) {
     for (const c of room.spectators) sendRoom(room, c, null);
   }
 
+  // 状态下发。新版客户端（proto 2）用增量协议：
+  //  - 只发和上一次相比变了的字段（站着不动的人、没变化的发报机 / 木板 / 大门都不发），流量降到原来的一成左右；
+  //  - 客户端回报收到了第几份；如果落后太多（网络拥塞），就先不发新的——过时的位置发过去也没用，
+  //    等它追上来再发最新的。这样延迟不会越积越多。事件（受击、倒地等）会攒着，不会丢。
+  const TOP = ['t', 'phase', 'left', 'powered', 'reveal', 'machines', 'pallets', 'gates', 'cages', 'hatch', 'webs', 'decoys', 'result', 'scores'];
+  const MAX_UNACKED = 14; // 约 0.7 秒的量
   function sendState(room, conn, pid, events) {
     const g = room.game;
-    const v = g.view(pid);
-    v.gameId = room.gameId;
-    if (conn.setupFor !== room.gameId) {
+    const fresh = conn.setupFor !== room.gameId;
+    if (fresh) {
       conn.setupFor = room.gameId;
-      v.setup = g.setup();
+      conn.last = null;
+      conn.evq = [];
+      conn.seq = 0;
+      conn.acked = 0;
     }
-    if (events && events.length) v.events = events;
-    conn.send({ t: 'state', d: v });
+    if (conn.proto !== 2) {
+      const v = g.view(pid);
+      v.gameId = room.gameId;
+      if (fresh) v.setup = g.setup();
+      if (events && events.length) v.events = events;
+      return conn.send({ t: 'state', d: v });
+    }
+    if (events && events.length) conn.evq = conn.evq.concat(events);
+    const now = Date.now();
+    if (!fresh && g.phase !== 'ended' && conn.seq - conn.acked > MAX_UNACKED && now - (conn.sentAt || 0) < 1000) {
+      stats.skipped++;
+      return;
+    }
+    conn.sentAt = now;
+    const v = g.view(pid);
+    const last = conn.last || (conn.last = { top: {}, pl: [] });
+    const out = { n: ++conn.seq, gameId: room.gameId };
+    if (fresh) out.setup = g.setup();
+    for (const k of TOP) {
+      const s = typeof v[k] === 'object' && v[k] !== null ? JSON.stringify(v[k]) : v[k];
+      if (last.top[k] !== s) {
+        last.top[k] = s;
+        out[k] = v[k] === undefined ? null : v[k];
+      }
+    }
+    out.p = v.players.map((p, i) => {
+      const lp = last.pl[i] || (last.pl[i] = {});
+      const o = {};
+      let any = false;
+      for (const k in p) {
+        if (k === 'id' || k === 'cd' || k === 'stun') continue;
+        const val = p[k];
+        const s = typeof val === 'object' && val !== null ? JSON.stringify(val) : val;
+        if (lp[k] !== s) {
+          lp[k] = s;
+          o[k] = val;
+          any = true;
+        }
+      }
+      // 这次没有的字段（提示、校准结束了）：告诉客户端删掉
+      for (const k in lp)
+        if (lp[k] !== undefined && !(k in p)) {
+          lp[k] = undefined;
+          o[k] = null;
+          any = true;
+        }
+      return any ? o : 0;
+    });
+    if (conn.evq.length) {
+      out.events = conn.evq;
+      conn.evq = [];
+    }
+    conn.send({ t: 'state', d: out });
   }
 
   function broadcastState(room, events) {
@@ -195,9 +254,12 @@ module.exports = function createHunt(platform) {
     }
   }
 
+  // 诊断用：服务器对局循环晚了多少毫秒（最近的最大值）、因为拥塞跳过了多少次下发
+  const stats = { lag: 0, skipped: 0 };
   let lastTick = Date.now();
   const loop = setInterval(() => {
     const now = Date.now();
+    stats.lag = Math.max(stats.lag * 0.98, now - lastTick - TICK_MS);
     const dt = Math.min(0.5, (now - lastTick) / 1000) * SPEED;
     lastTick = now;
     for (const room of rooms.values()) {
@@ -595,7 +657,18 @@ module.exports = function createHunt(platform) {
 
         // 客户端测往返延迟用：原样送回
     ping(conn, d) {
-      conn.send({ t: 'pong', d: { c: Number(d.c) || 0 } });
+      conn.send({ t: 'pong', d: { c: Number(d.c) || 0, lag: Math.round(stats.lag) } });
+    },
+
+    // 新版客户端声明自己支持增量协议
+    proto(conn, d) {
+      conn.proto = Number(d.v) === 2 ? 2 : 1;
+    },
+
+    // 客户端回报：收到了第几份状态
+    k(conn, d) {
+      const n = Number(d.n) || 0;
+      if (n > (conn.acked || 0) && n <= (conn.seq || 0)) conn.acked = n;
     },
 
     chat(conn, d) {
@@ -684,7 +757,8 @@ module.exports = function createHunt(platform) {
     summary,
     presence,
     shutdown,
-    rateKey: (t) => (t === 'act' || t === 'ping' ? 'act' : null),
+    rateKey: (t) => (t === 'act' || t === 'ping' || t === 'k' ? 'act' : null),
     rooms,
+    stats,
   };
 };

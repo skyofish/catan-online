@@ -164,6 +164,63 @@ const meOf = (c) => c.state.players.find((p) => p.id === c.you);
     await a.wait((m) => m.t === 'error' && /不能出刀/.test(m.d.msg));
     console.log('✓ 开局补齐电脑、下发地图、准备阶段冻结、服务器权威移动、求生者不能出刀');
 
+    // ---------- 增量协议与拥塞控制 ----------
+    {
+      const ws = new WebSocket(`ws://127.0.0.1:${PORT}/hunt/ws`);
+      await new Promise((r) => (ws.onopen = r));
+      const acc = { players: null };
+      let bytes = 0;
+      let count = 0;
+      let lastN = 0;
+      let ack = true;
+      ws.onmessage = (ev) => {
+        const m = JSON.parse(ev.data);
+        if (m.t !== 'state') return;
+        const d = m.d;
+        assert.ok(d.n === lastN + 1 || d.setup, '增量状态应按顺序编号');
+        lastN = d.n;
+        if (d.setup) acc.players = d.setup.players.map((p) => ({ id: p.id }));
+        else {
+          bytes += ev.data.length;
+          count++;
+        }
+        for (const k in d) if (k !== 'p' && k !== 'n') acc[k] = d[k];
+        d.p.forEach((o, i) => o && Object.assign(acc.players[i], o));
+        if (ack) ws.send(JSON.stringify({ t: 'k', d: { n: d.n } }));
+      };
+      const send = (t, d = {}) => ws.send(JSON.stringify({ t, d }));
+      send('hello', { session: sC });
+      send('proto', { v: 2 });
+      send('join', { code });
+      await sleep(1500);
+      const full = a.state;
+      assert.ok(count > 20, '观战者应持续收到状态');
+      assert.strictEqual(acc.players.length, 5);
+      for (const [i, pl] of full.players.entries()) {
+        assert.ok(Math.abs(acc.players[i].x - pl.x) < 1 && Math.abs(acc.players[i].z - pl.z) < 1, '增量合并后的位置应与完整状态一致');
+        assert.strictEqual(acc.players[i].st, pl.st);
+      }
+      assert.deepStrictEqual(acc.pallets, full.pallets);
+      assert.strictEqual(acc.machines.length, 7);
+      const avg = bytes / count;
+      const fullSize = JSON.stringify({ t: 'state', d: full }).length;
+      assert.ok(avg < fullSize * 0.4, `增量状态应明显更小（${Math.round(avg)} 对 ${fullSize}）`);
+      // 不再确认：服务器应把下发降到每秒一次左右，而不是继续堆积
+      ack = false;
+      await sleep(1200);
+      const before = count;
+      await sleep(2000);
+      assert.ok(count - before <= 4, `连接堵住时应停止堆积（2 秒内又发了 ${count - before} 份）`);
+      // 恢复确认后重新跟上
+      ack = true;
+      ws.send(JSON.stringify({ t: 'k', d: { n: lastN } }));
+      const mid = count;
+      await sleep(1000);
+      assert.ok(count - mid > 10, '恢复后应重新按正常频率下发');
+      ws.close();
+      console.log(`✓ 增量协议：平均每份 ${Math.round(avg)} 字节（完整状态 ${fullSize} 字节）；连接堵住时暂停下发、恢复后跟上`);
+    }
+
     // ---------- 掉线代管、回来恢复 ----------
     b.ws.close();
     await a.wait((m) => m.t === 'room' && a.room.players.find((p) => p.name === '小雨')?.autoBot, 5000);

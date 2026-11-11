@@ -77,6 +77,8 @@ function connect() {
   ws.onopen = () => {
     S.retry = 0;
     ws.send(JSON.stringify({ t: 'hello', d: { session: getSession() } }));
+    ws.send(JSON.stringify({ t: 'proto', d: { v: 2 } }));
+    S.acc = null;
   };
   ws.onmessage = (ev) => {
     let m;
@@ -118,7 +120,7 @@ function onMsg(m) {
       onRoom(d);
       break;
     case 'state':
-      onState(d);
+      onState(d.n ? applyDelta(d) : d);
       break;
     case 'rooms':
       renderRoomList(d);
@@ -154,6 +156,7 @@ function onMsg(m) {
       renderOnline(d);
       break;
     case 'pong': {
+      S.srvLag = d.lag || 0;
       // 取最近几次里最小的往返时间，抖动大的时候不至于忽高忽低
       S.rtts.push(performance.now() - d.c);
       if (S.rtts.length > 6) S.rtts.shift();
@@ -318,6 +321,35 @@ const mePl = () => (S.st && S.you ? S.st.players.find((p) => p.id === S.you) : n
 const info = (id) => (S.setup ? S.setup.players.find((p) => p.id === id) : null);
 const myInfo = () => info(S.you);
 const defOf = (i) => (i.role === 'hunter' ? S.cfg.HUNTERS : S.cfg.SURVIVORS)[i.char];
+
+// 增量协议：服务器只发变了的字段，这里把它们合并回一份完整的状态
+function applyDelta(d) {
+  if (d.setup || !S.acc || S.acc.gameId !== d.gameId) S.acc = { gameId: d.gameId, players: (d.setup || S.setup).players.map((p) => ({ id: p.id })) };
+  const acc = S.acc;
+  for (const k in d) {
+    if (k === 'p' || k === 'n' || k === 'events' || k === 'setup') continue;
+    acc[k] = d[k] === null ? undefined : d[k];
+  }
+  d.p.forEach((o, i) => {
+    const pl = acc.players[i];
+    if (o)
+      for (const k in o) {
+        // x / z 为 null 表示"隐身，看不见"，要保留；其他字段的 null 表示删除
+        if (o[k] === null && k !== 'x' && k !== 'z') delete pl[k];
+        else pl[k] = o[k];
+      }
+    pl.cd = Math.max(0, (pl.cdE || 0) - acc.t);
+    pl.stun = Math.max(0, (pl.stunE || 0) - acc.t);
+  });
+  acc.setup = d.setup;
+  acc.events = d.events;
+  // 回报收到了第几份；服务器据此判断这条连接有没有堵住
+  if (d.n - (S.ackN || 0) >= 2 || d.n < (S.ackN || 0)) {
+    S.ackN = d.n;
+    send('k', { n: d.n });
+  }
+  return acc;
+}
 
 function onState(d) {
   if (d.setup) {
@@ -723,7 +755,7 @@ function renderHud() {
   sound.heart = heart;
   sound.chase += (chase - sound.chase) * 0.1;
   put($('#danger'), 'opacity', String(Math.round(heart * 17) / 20));
-  if (showFps) put($('#fps'), 'text', `${scene.fps} 帧 · 分辨率 ${Math.round(scene.scale * 100)}% · 延迟 ${Math.round(S.rtt)} ms`);
+  if (showFps) put($('#fps'), 'text', `${scene.fps} 帧 · 分辨率 ${Math.round(scene.scale * 100)}% · 延迟 ${Math.round(S.rtt)} ms（最近 ${Math.round(S.rtts[S.rtts.length - 1] || 0)}）· 服务器 ${S.srvLag || 0} ms`);
   // 观战
   const sp = $('#spectate');
   const out = me.st === 'dead' || me.st === 'escaped';
