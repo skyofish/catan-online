@@ -126,6 +126,15 @@ button { cursor: pointer; }
 .box-dorm .box-art { background: radial-gradient(ellipse at 70% 40%, #3c1418, #160a0c 60%, #070304); }
 .box-dorm .box-title { color: #f3d7d2; text-shadow: 0 0 12px rgba(224, 38, 44, 0.8), 0 2px 0 #000; }
 .box-brass .box-art { background: #3a2a3a; }
+.box-hunt .box-art { background: #0d1420; }
+.box-hunt .box-title { color: #e8e4d0; text-shadow: 0 0 14px rgba(140, 180, 200, 0.7), 0 2px 0 #000; letter-spacing: 0.12em; }
+.box-hunt .hfog { animation: hunt-fog 9s ease-in-out infinite; }
+.box-hunt .hlamp { animation: hunt-lamp 2.4s ease-in-out infinite; }
+.box-hunt .heyes { animation: hunt-eyes 5s steps(1) infinite; }
+@keyframes hunt-fog { 50% { transform: translateX(18px); } }
+@keyframes hunt-lamp { 50% { opacity: 0.55; } }
+@keyframes hunt-eyes { 0%, 92% { opacity: 1; } 94%, 100% { opacity: 0; } }
+.box:nth-child(5) { animation-delay: 0.32s; }
 .box-farm .box-art { background: #8fc0e6; }
 .box-farm .box-title { color: #fffaf0; text-shadow: 0 2px 0 #3a5a2a, 0 0 14px rgba(255, 255, 255, 0.5); }
 .box-farm .fcloud { animation: farm-cloud 14s ease-in-out infinite; }

@@ -123,7 +123,8 @@ const catan = require('./games/catan')(platform);
 const dorm = require('./games/dorm')(platform);
 const brass = require('./games/brass')(platform);
 const farm = require('./games/farm')(platform);
-const GAMES = { catan, dorm, brass, farm };
+const hunt = require('./games/hunt')(platform);
+const GAMES = { catan, dorm, brass, farm, hunt };
 
 // 玩家当前状态（供各游戏的「邀请在线玩家」列表）：idle 空闲 / room 在某个游戏的房间里 / playing 对局中
 platform.presence = (userId) => {
@@ -173,6 +174,15 @@ const CATALOG = [
     players: '1–8 人',
     minutes: '随时进出',
     features: ['3D 手绘风原野', '四季与天气', '农场长期存档', '手机可玩'],
+  },
+  {
+    id: 'hunt',
+    name: '雾夜追猎',
+    path: '/hunt/',
+    tagline: '一名追猎者，四名求生者。修好发报机、打开大门，在雾里逃出生天',
+    players: '1–5 人',
+    minutes: '约 6 分钟',
+    features: ['3D 非对称对抗', '6 名求生者 · 3 名追猎者', '3 张地图', '电脑与 AI 玩家', '手机可玩'],
   },
 ];
 
@@ -380,7 +390,7 @@ function serveFile(req, res, file) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, dormRooms: dorm.rooms.size, brassRooms: brass.rooms.size, farms: farm.rooms.size, uptime: process.uptime() | 0 });
+  if (url.pathname === '/health') return sendJSON(res, 200, { ok: true, online: userConns.size, rooms: catan.rooms.size, dormRooms: dorm.rooms.size, brassRooms: brass.rooms.size, farms: farm.rooms.size, huntRooms: hunt.rooms.size, uptime: process.uptime() | 0 });
   if (url.pathname === '/api/tts' && req.method === 'POST') return void handleTts(req, res);
   if (url.pathname.startsWith('/api/')) return void handleApi(req, res, url);
 
@@ -410,8 +420,8 @@ const server = http.createServer((req, res) => {
 });
 
 // ======================= WebSocket =======================
-// /hub/ws：平台大厅（在线状态、接收邀请）；/catan/ws：卡坦岛；/dorm/ws：猛鬼宿舍；/brass/ws：工业革命：伯明翰；/farm/ws：青野牧歌；/ws：旧版卡坦岛地址
-const WS_ROUTES = { '/hub/ws': null, '/catan/ws': catan, '/dorm/ws': dorm, '/brass/ws': brass, '/farm/ws': farm, '/ws': catan };
+// /hub/ws：平台大厅（在线状态、接收邀请）；/catan/ws：卡坦岛；/dorm/ws：猛鬼宿舍；/brass/ws：工业革命：伯明翰；/farm/ws：青野牧歌；/hunt/ws：雾夜追猎；/ws：旧版卡坦岛地址
+const WS_ROUTES = { '/hub/ws': null, '/catan/ws': catan, '/dorm/ws': dorm, '/brass/ws': brass, '/farm/ws': farm, '/hunt/ws': hunt, '/ws': catan };
 
 const platformHandlers = {
   hello(conn, d) {
