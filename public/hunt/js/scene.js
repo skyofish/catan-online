@@ -245,6 +245,10 @@ const GEO = {
 // 所有烘焙出来的模型共用一个材质（顶点色）
 const VCOL = new THREE.MeshLambertMaterial({ vertexColors: true });
 const GHOST = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.3, depthWrite: false });
+// 自己的角色被墙挡住时显示一层剪影（只画被挡住的部分），这样镜头不用自己躲墙。
+// 为了让剪影先于角色本体绘制，自己的角色本体也走透明队列（不透明度仍是 1），用 renderOrder 排先后。
+const SELF = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true });
+const XRAY = new THREE.MeshBasicMaterial({ color: 0xbcd6ff, transparent: true, opacity: 0.42, depthFunc: THREE.GreaterDepth, depthWrite: false, fog: false });
 const COLORS = new Map();
 const colorOf = (c) => {
   if (!COLORS.has(c)) COLORS.set(c, new THREE.Color(c));
@@ -716,8 +720,9 @@ export class Scene {
     this.pitch = this.pitchT = 0.72;
     this.spin = 0;
     this.camDist = 7;
-    this.curDist = 7;
     this.shake = 0;
+    this.lag = 0; // 往返延迟的一半（秒），用来把别人的位置往前推一点
+    this.localSwing = 0;
     this.time = 0;
     this.world = null;
     this.chars = new Map();
@@ -1242,7 +1247,21 @@ export class Scene {
       stars.visible = false;
       m.g.visible = false;
       world.add(m.g);
-      const c = { ...m, shadow, label, mark, stars, info: p, x: 0, z: 0, d: 0, y: 0, phase: Math.random() * 6, has: false, swing: 0, ghost: 1 };
+      const c = { ...m, shadow, label, mark, stars, info: p, x: 0, z: 0, d: 0, y: 0, vx: 0, vz: 0, phase: Math.random() * 6, has: false, swing: 0, ghost: 1, solid: VCOL };
+      if (p.id === you) {
+        c.solid = SELF;
+        const baked = [];
+        m.g.traverse((o) => o.isMesh && o.userData.baked && baked.push(o));
+        for (const o of baked) {
+          o.material = SELF;
+          o.renderOrder = 6;
+          const x = new THREE.Mesh(o.geometry, XRAY);
+          x.renderOrder = 5;
+          x.userData.xray = true;
+          o.parent.add(x);
+        }
+        mark.renderOrder = stars.renderOrder = 9;
+      }
       this.chars.set(p.id, c);
       if (p.role === 'hunter') this.hunterC = c;
     }
@@ -1275,6 +1294,7 @@ export class Scene {
       geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
       const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size, map: this.glow, vertexColors: true, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, opacity: additive ? 1 : 0.55 }));
       pts.frustumCulled = false;
+      pts.renderOrder = 7;
       world.add(pts);
       return { pts, N, list: [], next: 0 };
     };
@@ -1395,6 +1415,14 @@ export class Scene {
       if (!c) continue;
       c.pl = p;
       if (p.x !== null) {
+        // 由相邻两次状态估出速度，渲染时按经过的时间往前推（航位推算），别人的动作就不会总是慢一拍
+        const dts = st.t - (c.snapT || 0);
+        if (c.tx !== undefined && dts > 0.01 && dts < 0.3 && p.mv) {
+          c.vx = (p.x - c.tx) / dts;
+          c.vz = (p.z - c.tz) / dts;
+        } else c.vx = c.vz = 0;
+        c.snapT = st.t;
+        c.snapAt = performance.now();
         c.tx = p.x;
         c.tz = p.z;
         c.td = p.d;
@@ -1432,9 +1460,10 @@ export class Scene {
         c.z = mePos.z;
         c.d = lerpAng(c.d, mePos.d, damp(16, dt));
       } else if (c.tx !== undefined) {
-        const k = damp(15, dt);
-        c.x = lerp(c.x, c.tx, k);
-        c.z = lerp(c.z, c.tz, k);
+        const k = damp(18, dt);
+        const ahead = Math.min(0.16, (performance.now() - c.snapAt) / 1000 + this.lag);
+        c.x = lerp(c.x, c.tx + c.vx * ahead, k);
+        c.z = lerp(c.z, c.tz + c.vz * ahead, k);
         c.d = lerpAng(c.d, c.td, damp(11, dt));
       }
       const moved = Math.hypot(c.x - px, c.z - pz);
@@ -1644,14 +1673,16 @@ export class Scene {
       if (c.ghost !== ghost) {
         c.ghost = ghost;
         c.g.traverse((o) => {
-          if (o.isMesh && o.userData.baked) o.material = ghost < 1 ? GHOST : VCOL;
+          if (o.isMesh && o.userData.baked) o.material = ghost < 1 ? GHOST : c.solid;
+          if (o.userData.xray) o.visible = ghost === 1;
         });
       }
       c.mark.visible = this.meRole === 'hunter' && !!p.shown && p.st === 'ok';
       c.label.visible = this.meRole !== 'hunter' && c.info.id !== this.you && p.st !== 'carried';
     } else {
       rx *= 0.6;
-      if (a === 'wind') {
+      // 自己按下出刀的瞬间先在本地抬手，不等服务器回话
+      if (a === 'wind' || (!a && c.info.id === this.you && this.localSwing > performance.now())) {
         c.swing = lerp(c.swing, 1, damp(16, dt));
         ra = -2.9 * c.swing;
         fr = -0.9 * c.swing;
@@ -1741,38 +1772,12 @@ export class Scene {
     const tx = f.x;
     const ty = this.meRole === 'hunter' ? 1.95 : 1.3;
     const tz = f.z;
-    // 镜头与角色之间有墙：先把镜头抬高（从墙头上方看过去），实在不行再拉近
-    const map = this.setup.map;
-    const W = map.W;
+    // 镜头只听玩家的：不自动抬高、不自动拉近。角色被墙挡住时由剪影来保证看得见。
+    const cp = Math.cos(this.pitch);
+    const sp = Math.sin(this.pitch);
     const sy = Math.sin(this.yaw);
     const cy = Math.cos(this.yaw);
-    const blockedAt = (pitch) => {
-      const c = Math.cos(pitch);
-      const s = Math.sin(pitch);
-      for (let d = 0.5; d <= this.camDist; d += 0.3) {
-        const cx = Math.floor(tx + sy * c * d);
-        const cz = Math.floor(tz + cy * c * d);
-        if (cx < 0 || cz < 0 || cx >= W || cz >= W) return d;
-        const border = cx === 0 || cz === 0 || cx === W - 1 || cz === W - 1;
-        if (map.rows[cz].charCodeAt(cx) === 49 && ty + s * d < (border ? 5 : 3.3)) return d;
-      }
-      return -1;
-    };
-    let pitch = this.pitch;
-    let want = this.camDist;
-    let hit = blockedAt(pitch);
-    while (hit >= 0 && pitch < 1.3) {
-      pitch = Math.min(1.3, pitch + 0.06);
-      hit = blockedAt(pitch);
-    }
-    if (hit >= 0) want = Math.max(2.6, hit - 0.4);
-    // 抬高要快（不能让墙挡住人），落回去要慢（避免贴墙走时上下晃）
-    const cur = this.effPitch === undefined ? pitch : this.effPitch;
-    this.effPitch = cur + (pitch - cur) * damp(pitch > cur ? 9 : 2.2, dt);
-    const cp = Math.cos(this.effPitch);
-    const sp = Math.sin(this.effPitch);
-    this.curDist += (want - this.curDist) * damp(want < this.curDist ? 12 : 3.5, dt);
-    const d = this.curDist;
+    const d = this.camDist;
     let ox = 0;
     let oy = 0;
     if (this.shake > 0) {

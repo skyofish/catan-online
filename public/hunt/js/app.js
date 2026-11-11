@@ -58,6 +58,10 @@ const S = {
   input: { x: 0, y: 0 }, // 摇杆 / 键盘（屏幕方向）
   keys: new Set(),
   lastMove: { x: 0, z: 0, t: 0 },
+  hist: [], // 最近一秒自己预测出来的位置，用来和服务器的位置对账
+  corr: { x: 0, z: 0 },
+  rtt: 80,
+  rtts: [],
   solid: null,
   dyn: null,
   qte: null,
@@ -149,6 +153,14 @@ function onMsg(m) {
     case 'online':
       renderOnline(d);
       break;
+    case 'pong': {
+      // 取最近几次里最小的往返时间，抖动大的时候不至于忽高忽低
+      S.rtts.push(performance.now() - d.c);
+      if (S.rtts.length > 6) S.rtts.shift();
+      S.rtt = Math.min(...S.rtts);
+      if (scene) scene.lag = Math.min(0.12, S.rtt / 2000);
+      break;
+    }
     case 'invite':
       showInvite(d);
       break;
@@ -324,6 +336,8 @@ function onState(d) {
     scene.build(d.setup, S.cfg, S.you);
     const me = d.players.find((p) => p.id === S.you) || d.players.find((p) => p.x !== null);
     S.me = { x: me.x, z: me.z, d: me.d };
+    S.hist = [];
+    S.corr = { x: 0, z: 0 };
     scene.setYaw(me.d + Math.PI);
     scene.focus.x = me.x;
     scene.focus.z = me.z;
@@ -357,6 +371,7 @@ function onState(d) {
     if (hunter || !d.gates[i][1]) for (const c of g.cells) S.dyn[c.z * S.W + c.x] = 1;
   });
   scene.sync(d, myInfo() ? myInfo().role : 'spectator');
+  reconcile(d);
   for (const e of d.events || []) onEvent(e);
   renderHud(prev);
   if (d.phase === 'ended' && S.endShown !== S.gameId) {
@@ -409,6 +424,7 @@ function onEvent(e) {
       banner(hunterSide ? '开始追猎' : '快去修发报机', hunterSide ? '找到他们' : '头顶有光柱的就是');
       break;
     case 'swing':
+      if (iAm(e.pid) && performance.now() - (S.swungAt || 0) < 600) break;
       if (near(pos(e.pid))) sound.play('swing');
       break;
     case 'miss':
@@ -707,7 +723,7 @@ function renderHud() {
   sound.heart = heart;
   sound.chase += (chase - sound.chase) * 0.1;
   put($('#danger'), 'opacity', String(Math.round(heart * 17) / 20));
-  if (showFps) put($('#fps'), 'text', `${scene.fps} 帧 · 分辨率 ${Math.round(scene.scale * 100)}%`);
+  if (showFps) put($('#fps'), 'text', `${scene.fps} 帧 · 分辨率 ${Math.round(scene.scale * 100)}% · 延迟 ${Math.round(S.rtt)} ms`);
   // 观战
   const sp = $('#spectate');
   const out = me.st === 'dead' || me.st === 'escaped';
@@ -783,6 +799,26 @@ function moveLocal(p, dx, dz, rad) {
   }
 }
 
+// 对账：服务器这份状态反映的是"延迟之前"的我。拿它和我当时预测的位置比，差多少就补多少。
+// 这样直线跑动时误差接近 0，不会像以前那样一直被往回拽。
+function reconcile(st) {
+  const me = st.players.find((p) => p.id === S.you);
+  if (!me || me.x === null || !S.hist.length) return;
+  const when = performance.now() - (S.rtt + 75);
+  const h = S.hist;
+  let i = h.length - 1;
+  while (i > 0 && h[i].t > when) i--;
+  let px = h[i].x;
+  let pz = h[i].z;
+  if (i < h.length - 1 && h[i + 1].t > h[i].t) {
+    const k = clamp((when - h[i].t) / (h[i + 1].t - h[i].t), 0, 1);
+    px += (h[i + 1].x - px) * k;
+    pz += (h[i + 1].z - pz) * k;
+  }
+  S.corr.x = me.x - px;
+  S.corr.z = me.z - pz;
+}
+
 let lastT = performance.now();
 function loop(now) {
   requestAnimationFrame(loop);
@@ -810,7 +846,8 @@ function loop(now) {
   if (!playing || il < 0.15) wx = wz = 0;
   // 发送输入（节流）
   const lm = S.lastMove;
-  if ((Math.abs(wx - lm.x) > 0.04 || Math.abs(wz - lm.z) > 0.04) && (now - lm.t > 60 || (!wx && !wz))) {
+  const startStop = !wx !== !lm.x || !wz !== !lm.z;
+  if ((Math.abs(wx - lm.x) > 0.03 || Math.abs(wz - lm.z) > 0.03) && (now - lm.t > 33 || startStop || (!wx && !wz))) {
     act('move', { x: Math.round(wx * 100) / 100, z: Math.round(wz * 100) / 100 });
     S.lastMove = { x: wx, z: wz, t: now };
   }
@@ -822,12 +859,33 @@ function loop(now) {
       moveLocal(S.me, wx * me.v * dt, wz * me.v * dt, S.cfg.RULES.radius);
       S.me.d = Math.atan2(wx, wz);
     } else S.me.d = me.d;
-    const ex = me.x - S.me.x;
-    const ez = me.z - S.me.z;
-    const err = Math.hypot(ex, ez);
-    const k = 1 - Math.exp(-(err > 3 || blocked ? 14 : moving ? 2.2 : 7) * dt);
-    S.me.x += ex * k;
-    S.me.z += ez * k;
+    if (blocked) {
+      // 翻越、被扛、眩晕等：位置完全由服务器说了算
+      const kk = 1 - Math.exp(-16 * dt);
+      S.me.x += (me.x - S.me.x) * kk;
+      S.me.z += (me.z - S.me.z) * kk;
+      S.hist.length = 0;
+      S.corr.x = S.corr.z = 0;
+    } else {
+      const c = S.corr;
+      const err = Math.hypot(c.x, c.z);
+      // 小误差慢慢抹平，大误差（撞墙判定不一致、被加速 / 减速）直接对齐
+      const k = err > 2.5 ? 1 : err < 0.02 ? 0 : 1 - Math.exp(-9 * dt);
+      const ax = c.x * k;
+      const az = c.z * k;
+      if (k) {
+        S.me.x += ax;
+        S.me.z += az;
+        c.x -= ax;
+        c.z -= az;
+        for (const h of S.hist) {
+          h.x += ax;
+          h.z += az;
+        }
+      }
+      S.hist.push({ t: now, x: S.me.x, z: S.me.z });
+      if (S.hist.length > 120) S.hist.shift();
+    }
   }
   // 镜头跟随
   let fx = S.me.x;
@@ -871,7 +929,15 @@ function doQte() {
 }
 const aimDir = () => Math.atan2(-Math.sin(scene.yaw), -Math.cos(scene.yaw));
 function doAttack() {
-  if (myInfo() && myInfo().role === 'hunter') act('attack', { d: aimDir() });
+  const me = mePl();
+  if (!me || !myInfo() || myInfo().role !== 'hunter') return;
+  act('attack', { d: aimDir() });
+  // 本地先给反馈：抬手 + 挥刀声，不等服务器
+  if (!me.a && !me.stun && !me.carry && S.st.phase === 'play') {
+    scene.localSwing = performance.now() + 350;
+    sound.play('swing');
+    S.swungAt = performance.now();
+  }
 }
 function doSkill() {
   const me = mePl();
@@ -1200,6 +1266,11 @@ $('#btn-chat').addEventListener('click', () => {
   if (!d.hidden && matchMedia('(pointer: fine)').matches) $('input', d).focus();
 });
 $('[data-close-drawer]').addEventListener('click', () => ($('#drawer').hidden = true));
+
+// 每 2 秒测一次往返延迟
+setInterval(() => {
+  if (document.body.dataset.screen === 'game') send('ping', { c: performance.now() });
+}, 2000);
 
 // ======================= 启动 =======================
 (async () => {
