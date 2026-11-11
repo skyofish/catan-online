@@ -1,6 +1,6 @@
 // 雾夜追猎：界面、网络、操作（摇杆 / 键盘 / 镜头）、本地走位预测、HUD 与事件编排。
 import { getSession, takeHashSession, api, upgradeToHttps, goToLogin, wsUrl } from '/js/session.js';
-import { initFullscreen } from '/js/fullscreen.js';
+import { initFullscreen, toggleFullscreen } from '/js/fullscreen.js';
 import { sound } from './audio.js';
 import { Scene } from './scene.js';
 
@@ -16,6 +16,25 @@ const BOT_TAG = { easy: '菜鸟电脑', normal: '老手电脑', hard: '大神电
 const USE_LABEL = { decode: '修机', heal: '治疗', rescue: '救人', drop: '放板', vault: '翻越', gate: '开门', hatch: '跳地窖', pickup: '扛起', cage: '关笼', break: '砸板' };
 const ACT_LABEL = { decode: '修发报机', heal: '治疗队友', rescue: '开笼救人', gate: '拉电闸', selfheal: '自我包扎', break: '砸木板', pickup: '扛起', cage: '关进铁笼' };
 const ST_NAME = { ok: '在场', down: '倒地', carried: '被扛着', caged: '在笼中', escaped: '逃脱', dead: '淘汰' };
+// 按键上的小图标（24×24 的线条画）
+const ICON = {
+  decode: 'M12 21V10M12 10a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2M8.2 5.2a5.4 5.4 0 0 1 7.6 0M5.4 2.6a9.4 9.4 0 0 1 13.2 0',
+  heal: 'M12 5v14M5 12h14',
+  rescue: 'M7 11h10v8H7zM9.5 11V8a2.8 2.8 0 0 1 5.2-1.4',
+  drop: 'M4 5l16 4v3L4 8zM12 13v7M9 17l3 3 3-3',
+  vault: 'M3 19h18M5 16c2-9 12-9 14 0M19 16l-3.2-.6M19 16l.8-3.2',
+  gate: 'M6 20h12M11 20l5-12M16 8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6',
+  hatch: 'M12 3v10M8 9l4 4 4-4M5 15v5h14v-5',
+  pickup: 'M12 20V7M7 12l5-5 5 5M5 4h14',
+  cage: 'M6 20V9a6 6 0 0 1 12 0v11M10 4v16M14 4v16M4 20h16',
+  break: 'M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3',
+  attack: 'M5 19l2.6-.8L19 6.8V4h-2.8L4.8 15.4zM7 17l-3.5 3.5M14 6l4 4',
+  skill: 'M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z',
+  stop: 'M7 7h10v10H7z',
+  qte: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 12l4-5M12 13.2a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4',
+  none: 'M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16',
+};
+const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON[k] || ICON.none}"/></svg>`;
 const BLOCKED = new Set(['vault', 'pickup', 'cage', 'break', 'wind', 'dash', 'cast']);
 const CHANNEL = new Set(['decode', 'heal', 'gate', 'selfheal', 'rescue']);
 
@@ -305,8 +324,17 @@ function onState(d) {
     scene.build(d.setup, S.cfg, S.you);
     const me = d.players.find((p) => p.id === S.you) || d.players.find((p) => p.x !== null);
     S.me = { x: me.x, z: me.z, d: me.d };
-    scene.yaw = me.d + Math.PI;
+    scene.setYaw(me.d + Math.PI);
+    scene.focus.x = me.x;
+    scene.focus.z = me.z;
     scene.camDist = mi && mi.role === 'hunter' ? 8 : 6.8;
+    try {
+      const sd = Number(localStorage.getItem('hunt.dist'));
+      if (sd >= 4 && sd <= 11) scene.camDist = sd;
+    } catch {}
+    $('#attack-ico').innerHTML = icon('attack');
+    $('#skill-ico').innerHTML = icon('skill');
+    hudKey = useKey = '';
     $('#btn-attack').hidden = !(mi && mi.role === 'hunter');
     $('#pad').hidden = !mi;
     $('#stick').hidden = !mi;
@@ -548,6 +576,18 @@ function showIntro() {
 
 // ---------------- HUD ----------------
 let hudKey = '';
+let useKey = '';
+// 只在值真的变了的时候才写 DOM（状态每秒来 20 次）
+const cache = new Map();
+function put(el, prop, val) {
+  const k = el.id + prop;
+  if (cache.get(k) === val) return;
+  cache.set(k, val);
+  if (prop === 'text') el.textContent = val;
+  else if (prop === 'hidden') el.hidden = val;
+  else if (prop.startsWith('--')) el.style.setProperty(prop, val);
+  else el.style[prop] = val;
+}
 function renderHud() {
   const st = S.st;
   const me = mePl();
@@ -607,24 +647,34 @@ function renderHud() {
     label = '眩晕';
     val = clamp(me.stun / 3.2, 0, 1);
   }
-  pr.hidden = !label;
+  put(pr, 'hidden', !label);
   if (label) {
-    $('#progress-label').textContent = label;
-    $('#progress-bar').style.width = `${Math.round(val * 100)}%`;
+    put($('#progress-label'), 'text', label);
+    put($('#progress-bar'), 'width', `${Math.round(val * 100)}%`);
   }
-  // 互动键
+  // 互动键：校准 > 停下 > 当前能做的事
   const channeling = CHANNEL.has(me.a);
   const hint = me.hint;
-  useBtn.disabled = !hint && !channeling;
-  useBtn.classList.toggle('hot', !!hint && !channeling);
-  $('#use-label').textContent = channeling && (!hint || hint.type === me.a) ? '停下' : hint ? USE_LABEL[hint.type] : '互动';
+  const mode = me.qte ? 'qte' : channeling && (!hint || hint.type === me.a) ? 'stop' : hint ? hint.type : 'none';
+  if (mode !== useKey) {
+    useKey = mode;
+    useBtn.disabled = mode === 'none';
+    useBtn.classList.toggle('hot', mode !== 'none' && mode !== 'stop' && mode !== 'qte');
+    useBtn.classList.toggle('qte', mode === 'qte');
+    $('#use-ico').innerHTML = icon(mode);
+    $('#use-label').textContent = mode === 'qte' ? '校准' : mode === 'stop' ? '停下' : mode === 'none' ? '互动' : USE_LABEL[mode];
+  }
   if (me.a === 'decode' && Math.random() < 0.35) sound.play('key');
   // 技能键
   const def = defOf(mi);
   const sk = $('#btn-skill');
-  sk.classList.toggle('cd', me.cd > 0);
-  $('#skill-mask').style.height = `${clamp(me.cd / def.skill.cd, 0, 1) * 100}%`;
-  $('#skill-cd').textContent = me.cd > 0 ? Math.ceil(me.cd) : '';
+  put(sk, '--cd', String(Math.round(clamp(me.cd / def.skill.cd, 0, 1) * 100) / 100));
+  const cdText = me.cd > 0 ? String(Math.ceil(me.cd)) : '';
+  if (cache.get('cdT') !== cdText) {
+    cache.set('cdT', cdText);
+    $('#skill-cd').textContent = cdText;
+    sk.classList.toggle('cd', me.cd > 0);
+  }
   // 校准
   const q = me.qte;
   if (q && (!S.qte || S.qte.id !== q.id)) {
@@ -656,11 +706,12 @@ function renderHud() {
   }
   sound.heart = heart;
   sound.chase += (chase - sound.chase) * 0.1;
-  $('#danger').style.opacity = heart * 0.85;
+  put($('#danger'), 'opacity', String(Math.round(heart * 17) / 20));
+  if (showFps) put($('#fps'), 'text', `${scene.fps} 帧 · 分辨率 ${Math.round(scene.scale * 100)}%`);
   // 观战
   const sp = $('#spectate');
   const out = me.st === 'dead' || me.st === 'escaped';
-  sp.hidden = !out || st.phase === 'ended';
+  put(sp, 'hidden', !out || st.phase === 'ended');
   if (out) {
     const cands = st.players.filter((p) => p.id !== S.you && p.x !== null && p.st !== 'dead' && p.st !== 'escaped');
     if (!cands.some((p) => p.id === S.spec)) S.spec = cands.length ? cands[0].id : null;
@@ -676,8 +727,8 @@ function renderHud() {
         };
     }
   }
-  $('#pad').hidden = out;
-  $('#stick').style.visibility = out ? 'hidden' : '';
+  put($('#pad'), 'hidden', out);
+  put($('#stick'), 'visibility', out ? 'hidden' : '');
 }
 
 function showEnd() {
@@ -774,7 +825,7 @@ function loop(now) {
     const ex = me.x - S.me.x;
     const ez = me.z - S.me.z;
     const err = Math.hypot(ex, ez);
-    const k = err > 3 || blocked ? Math.min(1, dt * 14) : Math.min(1, dt * (moving ? 2.2 : 7));
+    const k = 1 - Math.exp(-(err > 3 || blocked ? 14 : moving ? 2.2 : 7) * dt);
     S.me.x += ex * k;
     S.me.z += ez * k;
   }
@@ -790,12 +841,13 @@ function loop(now) {
       fz = c.z;
     }
   }
-  scene.focus.x += (fx - scene.focus.x) * Math.min(1, dt * 18);
-  scene.focus.z += (fz - scene.focus.z) * Math.min(1, dt * 18);
+  const fk = 1 - Math.exp(-(out ? 8 : 20) * dt);
+  scene.focus.x += (fx - scene.focus.x) * fk;
+  scene.focus.z += (fz - scene.focus.z) * fk;
   // 校准指针
   if (S.qte) {
     const f = (now - S.qte.start) / 1000 / S.cfg.RULES.qteDur;
-    $('#qte-needle').setAttribute('transform', `rotate(${f * 360})`);
+    $('#qte-needle').style.transform = `rotate(${f * 360}deg)`;
   }
   scene.frame(dt, me && !out ? S.me : null);
 }
@@ -826,56 +878,79 @@ function doSkill() {
   if (me && me.cd <= 0) act('skill', { d: aimDir() });
 }
 
-// 触屏 / 鼠标：左半屏是摇杆，其余地方拖动转镜头
+// 触屏 / 鼠标：左半屏是摇杆，其余地方拖动转镜头。
+// 手指只改"目标角度"，镜头自己平滑地跟过去；松手时把最后的角速度交给镜头当惯性。
 const game = $('#screen-game');
 const ptr = { stick: null, look: null };
 const UI = 'button, .drawer, .end, .qte, .hud-top, .spectate, input';
+const stickEl = $('#stick');
+const knobEl = $('#stick-knob');
 game.addEventListener('pointerdown', (e) => {
   sound.unlock();
   if (e.target.closest(UI)) return;
   const touch = e.pointerType !== 'mouse';
-  if (touch && e.clientX < window.innerWidth * 0.42 && !ptr.stick) {
+  if (touch && e.clientX < window.innerWidth * 0.45 && !ptr.stick) {
     ptr.stick = { id: e.pointerId, x: e.clientX, y: e.clientY };
-    const st = $('#stick');
-    st.style.left = `${e.clientX - st.offsetWidth / 2}px`;
-    st.style.top = `${e.clientY - st.offsetHeight / 2}px`;
-    st.style.bottom = 'auto';
-  } else if (!ptr.look) ptr.look = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0, mouse: !touch };
-  game.setPointerCapture(e.pointerId);
+    stickEl.style.left = `${e.clientX - stickEl.offsetWidth / 2}px`;
+    stickEl.style.top = `${e.clientY - stickEl.offsetHeight / 2}px`;
+    stickEl.style.bottom = 'auto';
+    stickEl.classList.add('on');
+  } else if (!ptr.look) {
+    ptr.look = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0, mouse: !touch, v: 0, t: e.timeStamp };
+    if (scene) scene.spin = 0;
+  }
+  try {
+    game.setPointerCapture(e.pointerId);
+  } catch {}
 });
 game.addEventListener('pointermove', (e) => {
   if (ptr.stick && e.pointerId === ptr.stick.id) {
-    const R = 50;
+    const R = 52;
     let dx = (e.clientX - ptr.stick.x) / R;
     let dy = (e.clientY - ptr.stick.y) / R;
     const l = Math.hypot(dx, dy);
     if (l > 1) {
       dx /= l;
       dy /= l;
+      // 手指拖出圈外时，摇杆底座跟着手指走，不用抬手重新按
+      ptr.stick.x = e.clientX - dx * R;
+      ptr.stick.y = e.clientY - dy * R;
+      stickEl.style.left = `${ptr.stick.x - stickEl.offsetWidth / 2}px`;
+      stickEl.style.top = `${ptr.stick.y - stickEl.offsetHeight / 2}px`;
     }
     S.input.x = dx;
     S.input.y = -dy;
-    $('#stick-knob').style.transform = `translate(${dx * 36}px, ${dy * 36}px)`;
+    knobEl.style.transform = `translate3d(${dx * 38}px, ${dy * 38}px, 0)`;
   } else if (ptr.look && e.pointerId === ptr.look.id && scene) {
-    const dx = e.clientX - ptr.look.x;
-    const dy = e.clientY - ptr.look.y;
-    ptr.look.x = e.clientX;
-    ptr.look.y = e.clientY;
-    ptr.look.moved += Math.abs(dx) + Math.abs(dy);
-    scene.yaw -= dx * 0.0062;
-    scene.pitch = clamp(scene.pitch + dy * 0.004, 0.3, 1.25);
+    const L = ptr.look;
+    const dx = e.clientX - L.x;
+    const dy = e.clientY - L.y;
+    L.x = e.clientX;
+    L.y = e.clientY;
+    L.moved += Math.abs(dx) + Math.abs(dy);
+    // 灵敏度按屏幕宽度算：横向划过整屏大约转 260°
+    const sens = 4.6 / Math.min(Math.max(window.innerWidth, 480), 1100);
+    const dyaw = -dx * sens;
+    scene.yawT += dyaw;
+    scene.pitchT = clamp(scene.pitchT + dy * sens * 0.62, 0.3, 1.25);
+    const dtE = Math.max(4, e.timeStamp - L.t) / 1000;
+    L.t = e.timeStamp;
+    L.v = L.v * 0.6 + (dyaw / dtE) * 0.4;
   }
 });
 const pointerEnd = (e) => {
   if (ptr.stick && e.pointerId === ptr.stick.id) {
     ptr.stick = null;
     S.input.x = S.input.y = 0;
-    $('#stick-knob').style.transform = '';
-    const st = $('#stick');
-    st.style.left = st.style.top = st.style.bottom = '';
+    knobEl.style.transform = '';
+    stickEl.style.left = stickEl.style.top = stickEl.style.bottom = '';
+    stickEl.classList.remove('on');
   } else if (ptr.look && e.pointerId === ptr.look.id) {
+    const L = ptr.look;
     // 电脑上：没怎么拖动的一次点击 = 出刀
-    if (ptr.look.mouse && ptr.look.moved < 6 && e.type === 'pointerup') doAttack();
+    if (L.mouse && L.moved < 6 && e.type === 'pointerup') doAttack();
+    // 快速划动后松手：带一点惯性
+    else if (!L.mouse && scene && e.timeStamp - L.t < 60 && Math.abs(L.v) > 0.8) scene.spin = clamp(L.v, -7, 7) * 0.55;
     ptr.look = null;
   }
 };
@@ -886,6 +961,9 @@ game.addEventListener(
   'wheel',
   (e) => {
     if (scene) scene.camDist = clamp(scene.camDist + Math.sign(e.deltaY) * 0.6, 4, 11);
+    try {
+      localStorage.setItem('hunt.dist', scene.camDist);
+    } catch {}
   },
   { passive: true }
 );
@@ -900,6 +978,11 @@ press($('#btn-use'), doUse);
 press($('#btn-attack'), doAttack);
 press($('#btn-skill'), doSkill);
 press($('#qte'), doQte);
+let showFps = false;
+try {
+  showFps = localStorage.getItem('hunt.fps') === '1';
+} catch {}
+$('#fps').hidden = !showFps;
 
 const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 window.addEventListener('keydown', (e) => {
@@ -1076,18 +1159,34 @@ $('#btn-invite').addEventListener('click', () => {
 });
 $('#btn-sound-lobby').addEventListener('click', () => soundModal());
 $('#btn-menu').addEventListener('click', () => {
-  const q = scene && scene.quality === 'low';
-  soundModal(`<div class="actions" style="justify-content:flex-start;margin-bottom:10px"><button class="btn dark" id="m-quality">画质：${q ? '低' : '高'}</button><button class="btn dark" id="m-help">怎么玩</button><button class="btn dark" id="m-leave">离开对局</button></div>`);
+  const qn = () => `画质：${scene && scene.quality === 'low' ? '流畅' : '精细'}`;
+  soundModal(`<div class="actions" style="justify-content:flex-start;margin-bottom:10px">
+    <button class="btn dark" id="m-quality">${qn()}</button><button class="btn dark" id="m-fps">帧数显示：${showFps ? '开' : '关'}</button>
+    <button class="btn dark" id="m-full">全屏</button><button class="btn dark" id="m-help">怎么玩</button><button class="btn dark" id="m-leave">离开对局</button></div>
+    <p class="muted" style="margin:0 0 12px">画面卡的时候会自动降低渲染分辨率来保帧数；"流畅"会再关掉草丛和地面的雾。</p>`);
   $('#m-leave').addEventListener('click', () => {
     closeModal();
     send('leave');
+  });
+  $('#m-full').addEventListener('click', () => {
+    closeModal();
+    toggleFullscreen();
   });
   $('#m-quality').addEventListener('click', (e) => {
     scene.setQuality(scene.quality === 'low' ? 'high' : 'low');
     try {
       localStorage.setItem('hunt.quality', scene.quality);
     } catch {}
-    e.target.textContent = `画质：${scene.quality === 'low' ? '低' : '高'}`;
+    e.target.textContent = qn();
+  });
+  $('#m-fps').addEventListener('click', (e) => {
+    showFps = !showFps;
+    $('#fps').hidden = !showFps;
+    cache.delete('fpstext');
+    try {
+      localStorage.setItem('hunt.fps', showFps ? '1' : '0');
+    } catch {}
+    e.target.textContent = `帧数显示：${showFps ? '开' : '关'}`;
   });
   $('#m-help').addEventListener('click', () => modal(`<h3>怎么玩</h3><div class="help">${$('[data-pane="help"] ol').outerHTML}${$('[data-pane="help"] .muted').outerHTML}${codexHTML()}</div><div class="actions"><button class="btn dark" data-close-modal>知道了</button></div>`));
 });

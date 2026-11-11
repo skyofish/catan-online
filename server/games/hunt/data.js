@@ -49,7 +49,7 @@ const SURVIVORS = {
     passive: '修发报机速度 +20%，校准的成功区更宽。',
     skill: { name: '上紧发条', desc: '10 秒内修机速度再 +60%。', cd: 55 },
     color: '#c9a25a',
-    look: { coat: '#6b4a2e', accent: '#c9a25a', hair: '#3a2a22', skin: '#e9d2b8', hat: 'goggles' },
+    look: { coat: '#6b4a2e', coat2: '#4a3220', accent: '#c9a25a', hair: '#8a4a2a', skin: '#e9d2b8', style: 'tail', pants: '#3a2c20', sleeve: '#d8c8a8' },
   },
   nurse: {
     name: '夜巡护士 · 艾琳',
@@ -59,7 +59,7 @@ const SURVIVORS = {
     passive: '治疗队友速度 +50%。',
     skill: { name: '自我包扎', desc: '受伤时原地包扎 10 秒恢复健康（移动会打断）。', cd: 40 },
     color: '#9fc7c9',
-    look: { coat: '#dfe6e4', accent: '#8a3b3b', hair: '#7a4a2e', skin: '#f0dcc8', hat: 'cap' },
+    look: { coat: '#9fb8c4', coat2: '#dfe6e4', accent: '#8a3b3b', hair: '#6a3a26', skin: '#f0dcc8', style: 'bob', pants: '#e8e4dc', sock: '#f4f0ea', shoe: '#5a2a2a' },
   },
   runner: {
     name: '信差 · 雷欧',
@@ -69,7 +69,7 @@ const SURVIVORS = {
     passive: '翻窗、翻板速度 +25%。',
     skill: { name: '全力冲刺', desc: '3 秒内移动速度 +50%。', cd: 35 },
     color: '#d9794a',
-    look: { coat: '#3f5a78', accent: '#d9794a', hair: '#2a2420', skin: '#e3c4a4', hat: 'flat' },
+    look: { coat: '#3f5a78', coat2: '#2c4058', accent: '#d9794a', hair: '#2a2420', skin: '#e3c4a4', pants: '#2a3442', sock: '#c8b890', shoe: '#4a3020' },
   },
   guard: {
     name: '守夜人 · 布鲁诺',
@@ -79,7 +79,7 @@ const SURVIVORS = {
     passive: '把队友救出铁笼的速度 +40%。',
     skill: { name: '信号弹', desc: '朝前方打出强光，6 米内正对的追猎者眩晕 2.2 秒；若他正扛着人，会把人放下。', cd: 50 },
     color: '#7d8a5a',
-    look: { coat: '#4a5238', accent: '#b8a35a', hair: '#8a8a8a', skin: '#d8b898', hat: 'lantern' },
+    look: { coat: '#4a5238', coat2: '#343a28', accent: '#b8a35a', hair: '#9a9a96', skin: '#d8b898', style: 'beard', pants: '#2c2e24', sock: '#3a3428' },
   },
   illusion: {
     name: '戏法师 · 希尔',
@@ -89,7 +89,7 @@ const SURVIVORS = {
     passive: '被击中后的加速时间更长。',
     skill: { name: '障眼法', desc: '隐身 4 秒并加速 15%，原地留下一个假人迷惑追猎者。', cd: 50 },
     color: '#8a6fc0',
-    look: { coat: '#3a2a52', accent: '#c94a6a', hair: '#1c1a24', skin: '#ecd8c6', hat: 'top' },
+    look: { coat: '#3a2a52', coat2: '#241a36', accent: '#c94a6a', hair: '#1c1a24', skin: '#ecd8c6', pants: '#1c1826', sleeve: '#f0ece4', sock: '#f0ece4' },
   },
   scout: {
     name: '探路人 · 诺亚',
@@ -99,7 +99,7 @@ const SURVIVORS = {
     passive: '能更早听到心跳（感知范围 +40%）。',
     skill: { name: '铜哨', desc: '8 秒内让所有队友隔墙看见追猎者的位置。', cd: 40 },
     color: '#5aa07a',
-    look: { coat: '#2f5a48', accent: '#d8c27a', hair: '#5a3a22', skin: '#dcbc9c', hat: 'hood' },
+    look: { coat: '#2f5a48', coat2: '#234436', accent: '#d8c27a', hair: '#5a3a22', skin: '#dcbc9c', style: 'curl', pants: '#3a3226', sock: '#8a7a5a', shoe: '#3a2a1c' },
   },
 };
 

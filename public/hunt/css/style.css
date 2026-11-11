@@ -114,9 +114,9 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, .icon-btn:focus-v
 /* ---------- 对局 ---------- */
 body[data-screen='game'] { overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 #screen-game { overflow: hidden; }
-#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; filter: saturate(0.85) contrast(1.05); }
+#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 55%, transparent 52%, rgba(4, 8, 14, 0.6) 100%); }
-.danger { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 120px 30px rgba(184, 40, 30, 0.7); transition: opacity 0.2s; }
+.danger { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(184, 40, 30, 0.6) 100%); will-change: opacity; }
 .flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: #fff; }
 .flash.red { background: #b01c14; }
 .flash.go { animation: flash 0.45s ease-out; }
@@ -150,7 +150,7 @@ body[data-screen='game'] { overflow: hidden; touch-action: none; user-select: no
 @keyframes feed { 0% { opacity: 0; transform: translateX(-10px); } 6% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
 .spectate { position: absolute; bottom: calc(24px + var(--safe-b)); left: 50%; transform: translateX(-50%); background: rgba(11, 16, 24, 0.8); border: 1px solid var(--line2); padding: 8px 14px; border-radius: 3px; text-align: center; font-size: 13px; }
 .spectate button { margin-left: 8px; }
-.progress { position: absolute; left: 50%; bottom: calc(150px + var(--safe-b)); transform: translateX(-50%); width: min(300px, 60vw); text-align: center; font-size: 13px; text-shadow: 0 1px 4px #000; pointer-events: none; }
+.progress { position: absolute; left: 50%; bottom: calc(36px + var(--safe-b)); transform: translateX(-50%); width: min(300px, 60vw); text-align: center; font-size: 13px; text-shadow: 0 1px 4px #000; pointer-events: none; }
 .pbar { height: 10px; background: rgba(11, 16, 24, 0.8); border: 1px solid var(--line2); border-radius: 5px; overflow: hidden; margin-top: 4px; }
 .pbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #a9823f, #e6c887); }
 .qte { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: 150px; text-align: center; font-size: 13px; text-shadow: 0 1px 4px #000; cursor: pointer; animation: qte-in 0.15s; }
@@ -158,28 +158,42 @@ body[data-screen='game'] { overflow: hidden; touch-action: none; user-select: no
 .qte svg { width: 150px; height: 150px; display: block; }
 .q-ring { fill: rgba(11, 16, 24, 0.55); stroke: #e6e2d2; stroke-width: 3; }
 .q-zone { fill: none; stroke: var(--brass2); stroke-width: 10; }
-.q-needle { stroke: #ff5a48; stroke-width: 3; stroke-linecap: round; }
+.q-needle { stroke: #ff5a48; stroke-width: 3; stroke-linecap: round; transform-origin: 0 0; will-change: transform; }
 .q-hub { fill: #e6e2d2; }
-.stick { position: absolute; left: calc(26px + var(--safe-l)); bottom: calc(30px + var(--safe-b)); width: 124px; height: 124px; border-radius: 50%; border: 2px solid rgba(230, 226, 210, 0.3); background: rgba(11, 16, 24, 0.3); pointer-events: none; }
-.stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: rgba(230, 226, 210, 0.45); border: 2px solid rgba(230, 226, 210, 0.7); }
+.stick { position: absolute; left: calc(34px + var(--safe-l)); bottom: calc(34px + var(--safe-b)); width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(230, 226, 210, 0.22); background: radial-gradient(circle, rgba(11, 16, 24, 0.1) 40%, rgba(11, 16, 24, 0.4) 100%); pointer-events: none; opacity: 0.55; transition: opacity 0.15s; }
+.stick.on { opacity: 1; }
+.stick i { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px; border-radius: 50%; background: rgba(230, 226, 210, 0.4); border: 2px solid rgba(230, 226, 210, 0.75); will-change: transform; }
 @media (hover: hover) and (pointer: fine) { .stick { display: none; } }
-.pad { position: absolute; right: calc(20px + var(--safe-r)); bottom: calc(24px + var(--safe-b)); width: 190px; height: 170px; }
-.act { position: absolute; border-radius: 50%; border: 2px solid rgba(230, 226, 210, 0.6); background: rgba(11, 16, 24, 0.6); cursor: pointer; display: grid; place-items: center; overflow: hidden; touch-action: none; transition: transform 0.08s, opacity 0.15s; }
-.act:active { transform: scale(0.93); }
-.act b { font-size: 14px; position: relative; z-index: 1; font-weight: 600; }
-.act small { position: absolute; bottom: 8px; left: 0; right: 0; font-size: 11px; z-index: 1; }
-.act.use { right: 0; bottom: 0; width: 92px; height: 92px; border-color: var(--brass2); }
-.act.use b { font-size: 16px; }
-.act.use:disabled { opacity: 0.3; border-color: rgba(230, 226, 210, 0.4); }
-.act.use.hot { background: rgba(201, 162, 90, 0.35); box-shadow: 0 0 18px rgba(201, 162, 90, 0.6); }
-.act.attack { right: 0; bottom: 0; width: 100px; height: 100px; border-color: #ff8a70; background: rgba(120, 30, 24, 0.55); }
-.act.attack b { font-size: 18px; font-family: var(--serif); }
-.act.skill { right: 108px; bottom: 6px; width: 68px; height: 68px; }
-.act.skill b { font-size: 12px; padding: 0 6px; line-height: 1.2; }
-.act.skill i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.7); }
-.act.skill.cd { opacity: 0.75; border-color: rgba(230, 226, 210, 0.3); }
-body.hunter .act.use { right: 104px; bottom: 84px; width: 72px; height: 72px; }
-body.hunter .act.use b { font-size: 13px; }
+
+/* 右下的操作键：主键贴着右下角，次要键沿着拇指的弧线排开 */
+.pad { position: absolute; right: calc(18px + var(--safe-r)); bottom: calc(18px + var(--safe-b)); width: 0; height: 0; }
+.act { position: absolute; border-radius: 50%; border: 2px solid rgba(230, 226, 210, 0.55); background: rgba(11, 16, 24, 0.55); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; overflow: hidden; touch-action: none; transition: transform 0.08s, opacity 0.15s, box-shadow 0.15s; padding: 0; }
+.act:active { transform: scale(0.92); }
+.act .ico { width: 44%; height: 44%; display: block; }
+.act .ico svg { width: 100%; height: 100%; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.act b { font-size: 12px; line-height: 1.15; font-weight: 600; position: relative; z-index: 1; max-width: 90%; }
+.act kbd { display: none; position: absolute; top: 5px; right: 50%; transform: translateX(50%); font: 600 10px var(--sans); color: var(--muted); z-index: 1; }
+@media (hover: hover) and (pointer: fine) { .act kbd { display: block; } }
+/* 主键 */
+.act.a-use, .act.a-attack { right: 0; bottom: 0; width: 104px; height: 104px; }
+.act.a-use { border-color: var(--brass2); }
+.act.a-use b, .act.a-attack b { font-size: 15px; }
+.act.a-use:disabled { opacity: 0.32; border-color: rgba(230, 226, 210, 0.4); }
+.act.a-use.hot { background: rgba(201, 162, 90, 0.32); box-shadow: 0 0 20px rgba(201, 162, 90, 0.55); }
+.act.a-use.qte { background: rgba(230, 200, 135, 0.5); box-shadow: 0 0 26px rgba(230, 200, 135, 0.9); animation: pulse 0.5s infinite; }
+.act.a-attack { border-color: #ff9a82; background: rgba(120, 30, 24, 0.5); color: #ffe4dc; }
+.act.a-attack b { font-family: var(--serif); letter-spacing: 0.1em; }
+/* 技能：主键左侧 */
+.act.a-skill { right: 118px; bottom: -4px; width: 76px; height: 76px; }
+.act.a-skill::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(rgba(4, 8, 14, 0.78) calc(var(--cd, 0) * 1turn), transparent 0); pointer-events: none; }
+.act.a-skill small { position: absolute; inset: 0; display: grid; place-items: center; font: 600 24px var(--serif); z-index: 2; color: var(--text); }
+.act.a-skill.cd { border-color: rgba(230, 226, 210, 0.28); }
+.act.a-skill.cd b, .act.a-skill.cd .ico { opacity: 0.35; }
+/* 追猎者：出刀是主键，互动键挪到主键左上方的弧线上，没有可互动的东西时收起 */
+body.hunter .act.a-use { right: 78px; bottom: 96px; width: 78px; height: 78px; }
+body.hunter .act.a-use b { font-size: 12px; }
+body.hunter .act.a-use:disabled { opacity: 0; pointer-events: none; transform: scale(0.7); }
+.fps { position: absolute; left: calc(10px + var(--safe-l)); bottom: calc(6px + var(--safe-b)); font: 11px ui-monospace, monospace; color: var(--muted); pointer-events: none; text-shadow: 0 1px 2px #000; }
 .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(320px, 86vw); background: rgba(16, 23, 33, 0.96); border-left: 1px solid var(--line); padding: calc(10px + var(--safe-t)) 12px calc(10px + var(--safe-b)); display: flex; flex-direction: column; gap: 8px; z-index: 5; }
 .drawer-head { display: flex; justify-content: space-between; align-items: center; }
 .drawer .chat { flex: 1; height: auto; }
@@ -226,8 +240,8 @@ body.hunter .act.use b { font-size: 13px; }
 }
 @media (max-height: 460px) {
   .stick { width: 104px; height: 104px; bottom: calc(16px + var(--safe-b)); }
-  .pad { bottom: calc(12px + var(--safe-b)); transform: scale(0.88); transform-origin: bottom right; }
-  .progress { bottom: calc(110px + var(--safe-b)); }
+  .pad { bottom: calc(12px + var(--safe-b)); transform: scale(0.86); transform-origin: bottom right; }
+  .progress { bottom: calc(20px + var(--safe-b)); width: min(260px, 34vw); }
   .qte { width: 120px; top: 36%; } .qte svg { width: 120px; height: 120px; }
   .end { place-items: start center; }
 }
