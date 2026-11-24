@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101616">
+  <meta name="description" content="坦克大战：铁线防卫。最多四人联机合作，守住信标。">
+  <title>坦克大战：铁线防卫 · 朋友游戏厅</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="./css/style.css">
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <a class="back" href="/">‹ <span>游戏大厅</span></a>
+      <div class="brand"><i class="brand-mark" aria-hidden="true"></i> 铁线防卫</div>
+      <div class="top-tools">
+        <span id="connection" class="signal" role="status">连接中</span>
+        <button id="audio" class="tool" type="button" aria-label="关闭音效" title="关闭音效">♪</button>
+        <button class="tool" type="button" data-fullscreen aria-label="全屏"></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="lobby" class="shell">
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="tag">1–4 人联机合作</p>
+          <h1>坦克大战<span>铁线防卫</span></h1>
+          <p class="hero-text">集结装甲小队，守住能源信标。<br>打穿掩体，击退三波敌方坦克。</p>
+          <button id="open-create" class="primary launch" type="button" disabled>创建编队 <span aria-hidden="true">↗</span></button>
+        </div>
+        <div class="hero-caption"><span></span> 零号机库</div>
+      </div>
+      <div class="lobby-grid">
+        <section class="panel lobby-panel" aria-labelledby="rooms-heading">
+          <div class="panel-head">
+            <h2 id="rooms-heading">在线编队</h2>
+            <button id="refresh" class="plain" type="button" disabled>刷新</button>
+          </div>
+          <ul id="rooms" class="list"><li class="empty">正在连接大厅…</li></ul>
+          <form id="join" class="join">
+            <label class="sr-only" for="code">房间号</label>
+            <input id="code" name="code" placeholder="输入 5 位房间号" maxlength="5" spellcheck="false" autocomplete="off" required pattern="[A-Za-z0-9]{5}">
+            <button type="submit" disabled>加入</button>
+          </form>
+        </section>
+        <section class="panel field-guide" aria-labelledby="guide-heading">
+          <div class="panel-head"><h2 id="guide-heading">作战手册</h2></div>
+          <dl>
+            <div><dt><span class="guide-icon amber" aria-hidden="true">◈</span>守住信标</dt><dd>三波敌军都会进攻信标。清空敌军即获胜。</dd></div>
+            <div><dt><span class="guide-icon cyan" aria-hidden="true">▦</span>利用掩体</dt><dd>货箱可以击破。金属墙挡住双方炮火。</dd></div>
+            <div><dt><span class="guide-icon" aria-hidden="true">✥</span>驾驶战车</dt><dd><kbd>WASD</kbd> / <kbd>方向键</kbd> 移动，<kbd>空格</kbd> 开火。手机使用屏幕按钮。</dd></div>
+          </dl>
+        </section>
+      </div>
+    </section>
+
+    <section id="room-view" class="shell room-view" hidden>
+      <div class="command-banner">
+        <div><p class="tag">编队准备</p><h1 id="room-title"></h1></div>
+        <div class="command-actions">
+          <button id="copy-link" type="button">复制邀请链接 <span id="room-code"></span></button>
+          <button id="leave-room" class="plain" type="button">离开编队</button>
+        </div>
+      </div>
+      <div class="lobby-grid room-grid">
+        <section class="panel" aria-labelledby="crew-heading">
+          <div class="panel-head"><h2 id="crew-heading">装甲小队</h2><span id="crew-count" class="muted"></span></div>
+          <ol id="crew" class="crew"></ol>
+          <div class="room-actions">
+            <button id="open-invite" type="button">邀请在线好友</button>
+            <button id="start" class="primary" type="button">出发</button>
+            <span id="wait-host" class="muted" hidden>等待房主发起作战</span>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="map-heading">
+          <div class="panel-head"><h2 id="map-heading">作战区域</h2></div>
+          <div id="room-maps" class="maps"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="battle" class="shell battle" hidden>
+      <div class="battle-top">
+        <div><div class="tag">同队守卫</div><h1 id="battle-map">作战区域</h1></div>
+        <button id="leave-battle" class="plain" type="button">离开战场</button>
+      </div>
+      <div class="battle-grid">
+        <div class="battle-main">
+          <div class="hud">
+            <div><span>敌军波次</span><strong id="wave">—</strong></div>
+            <div><span>剩余敌军</span><strong id="remaining">—</strong></div>
+            <div class="core-meter"><span>信标耐久 <b id="core-count">—</b></span><progress id="core" max="12" value="12" aria-label="信标耐久"></progress></div>
+            <div><span>剩余时间</span><strong id="time">—</strong></div>
+          </div>
+          <div class="arena">
+            <canvas id="field" width="960" height="672" role="img" aria-label="俯视坦克战场"></canvas>
+            <div id="round-message" class="round-message" hidden></div>
+            <div id="result" class="result" hidden>
+              <div>
+                <p class="tag" id="result-label">作战结束</p>
+                <h2 id="result-title"></h2>
+                <p id="result-detail"></p>
+                <div class="result-actions">
+                  <button id="rematch" class="primary" type="button">返回编队</button>
+                  <button id="exit-result" type="button">回到列表</button>
+                </div>
+                <small id="result-wait" class="muted" hidden>等待房主返回编队</small>
+              </div>
+            </div>
+          </div>
+          <div id="touch" class="touch" aria-label="触屏控制">
+            <div class="dpad">
+              <button type="button" data-dir="0" aria-label="向上">↑</button>
+              <button type="button" data-dir="3" aria-label="向左">←</button>
+              <button type="button" data-dir="2" aria-label="向下">↓</button>
+              <button type="button" data-dir="1" aria-label="向右">→</button>
+            </div>
+            <button type="button" data-fire>开 火</button>
+          </div>
+        </div>
+        <aside class="battle-side panel">
+          <div class="panel-head"><h2>小队状态</h2></div>
+          <ul id="battle-crew" class="battle-crew"></ul>
+          <div class="battle-keyboard"><kbd>WASD</kbd> 移动 <kbd>空格</kbd> 开火</div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="create-dialog">
+    <div class="dialog-head"><h2>创建编队</h2><button class="plain" data-close type="button" aria-label="关闭">✕</button></div>
+    <form id="create">
+      <label class="field-label">编队名称<input name="title" maxlength="24" placeholder="默认使用你的昵称" autocomplete="off"></label>
+      <fieldset><legend>作战区域</legend><div id="create-maps" class="maps"></div></fieldset>
+      <label class="check"><input name="private" type="checkbox"> 隐藏编队，仅通过邀请或房间号加入</label>
+      <button type="submit" class="primary dialog-submit">创建编队</button>
+    </form>
+  </dialog>
+  <dialog id="invite-dialog">
+    <div class="dialog-head"><h2>邀请在线好友</h2><button class="plain" data-close type="button" aria-label="关闭">✕</button></div>
+    <ul id="online" class="list"></ul>
+    <button id="invite-refresh" class="plain" type="button">刷新在线好友</button>
+  </dialog>
+  <div id="incoming" class="incoming" aria-live="polite" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

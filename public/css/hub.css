@@ -127,6 +127,9 @@ button { cursor: pointer; }
 .box-dorm .box-title { color: #f3d7d2; text-shadow: 0 0 12px rgba(224, 38, 44, 0.8), 0 2px 0 #000; }
 .box-brass .box-art { background: #3a2a3a; }
 .box-hunt .box-art { background: #0d1420; }
+.box-tank .box-art { background: #121b1c; }
+.box-tank .box-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 75% center; }
+.box-tank .box-title { color: #f5eddd; text-shadow: 0 2px 6px #000, 0 1px 18px #000; }
 .box-hunt .box-title { color: #e8e4d0; text-shadow: 0 0 14px rgba(140, 180, 200, 0.7), 0 2px 0 #000; letter-spacing: 0.12em; }
 .box-hunt .hfog { animation: hunt-fog 9s ease-in-out infinite; }
 .box-hunt .hlamp { animation: hunt-lamp 2.4s ease-in-out infinite; }

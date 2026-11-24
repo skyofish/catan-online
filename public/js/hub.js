@@ -27,6 +27,7 @@ const PREVIEW = [
   { id: 'brass', name: '工业革命：伯明翰', tagline: '运河与铁路的时代：建工厂、修线路、卖货物，成为伯明翰的工业大亨', players: '2–4 人', minutes: '约 60–120 分钟' },
   { id: 'farm', name: '青野牧歌', tagline: '在风吹过的原野上开荒种地、养鸡放牛、钓鱼采集，和朋友一起经营一座农场', players: '1–8 人', minutes: '随时进出' },
   { id: 'hunt', name: '雾夜追猎', tagline: '一名追猎者，四名求生者。修好发报机、打开大门，在雾里逃出生天', players: '1–5 人', minutes: '约 6 分钟' },
+  { id: 'tank', name: '坦克大战：铁线防卫', tagline: '驾驶装甲战车，和队友守住信标，击退三波敌方坦克', players: '1–4 人', minutes: '约 4 分钟' },
 ];
 
 // ---------------- 盒盖插画 ----------------
@@ -150,7 +151,10 @@ function huntArt() {
     <path d="M276 150 q4 -40 16 -44 q12 4 14 44 Z" fill="#0a0e14"/>
   </svg>`;
 }
-const ART = { catan: catanArt, dorm: dormArt, brass: brassArt, farm: farmArt, hunt: huntArt };
+const ART = {
+  catan: catanArt, dorm: dormArt, brass: brassArt, farm: farmArt, hunt: huntArt,
+  tank: () => '<img src="/tank/art/iron-line.jpg" alt="" loading="lazy">',
+};
 
 function boxHTML(g, { preview = false } = {}) {
   const live = g.live || {};
