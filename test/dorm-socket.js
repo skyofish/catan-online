@@ -184,7 +184,8 @@ async function claimAny(c, order = [0, 4, 1, 5, 2, 6, 3, 7]) {
 
     // ---------- 掉线代管、回来恢复 ----------
     b.ws.close();
-    await a.wait((m) => m.t === 'room' && a.room.players.find((p) => p.name === '小雨')?.autoBot, 5000);
+    // 服务端每 5 秒检查一次，300ms 的掉线阈值可能要等到下一轮检查。
+    await a.wait((m) => m.t === 'room' && a.room.players.find((p) => p.name === '小雨')?.autoBot);
     const b2 = await login('B2', sB);
     b2.send('join', { code });
     await b2.wait((m) => m.t === 'room' && b2.you);

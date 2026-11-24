@@ -146,22 +146,24 @@ const dec = (b64) => Buffer.from(b64, 'base64');
     }
     assert.ok(target, '出生点旁边有空地');
     const hoeSlot = a.me.inv.findIndex((s) => s && s.id === 'hoe');
+    // 工具冷却按服务端的 100ms 模拟步更新，要给冷却结束后的下一步留时间。
+    const toolDelay = cfg.PLAYER.useCooldownMs + 150;
     let r = await a.act({ type: 'use', slot: hoeSlot, x: target.x, y: target.y });
     assert.ok(r.ok, r.error);
     await b.waitTick((d) => d.ch && d.ch.g.some(([i, v]) => i === target.i && v === G.TILLED));
-    await sleep(250);
+    await sleep(toolDelay);
     const seedSlot = a.me.inv.findIndex((s) => s && s.id === 'parsnip_seed');
     r = await a.act({ type: 'use', slot: seedSlot, x: target.x, y: target.y });
     assert.ok(r.ok, r.error);
     await b.waitTick((d) => d.ch && d.ch.o.some(([i, o]) => i === target.i && o && o.k === 'crop'));
-    await sleep(250);
+    await sleep(toolDelay);
     r = await a.act({ type: 'use', slot: a.me.inv.findIndex((s) => s && s.id === 'can'), x: target.x, y: target.y });
     assert.ok(r.ok, r.error);
     assert.ok(a.me.energy < cfg.PLAYER.maxEnergy, '扣了体力');
     // 太远的格子不行
-    await sleep(250);
+    await sleep(toolDelay);
     r = await a.act({ type: 'use', slot: hoeSlot, x: target.x + 8, y: target.y });
-    assert.ok(!r.ok && /太远/.test(r.error));
+    assert.ok(!r.ok && /太远/.test(r.error), `预期超出操作距离，实际响应：${JSON.stringify(r)}`);
     console.log('  ✓ 翻地、播种、浇水同步给朋友；太远的格子会被拒绝');
 
     // 5. 跨游戏邀请：在猛鬼宿舍页面的人也能收到
