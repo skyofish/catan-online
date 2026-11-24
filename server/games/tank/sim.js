@@ -1,15 +1,14 @@
 'use strict';
 
 const { TILE, COLS, ROWS, BASE, ENTRY, DOCKS, terrain } = require('./maps');
+const { DIRECTIONS: DIR, STEP, SHOT_COOLDOWN, drive, move } = require('../../../public/tank/js/movement.mjs');
 
-const STEP = 1 / 40;
 const WIDTH = COLS * TILE;
 const HEIGHT = ROWS * TILE;
 const RADIUS = 15;
 const WAVE_COUNT = 3;
 const MATCH_TIME = 240;
 const CORE_HP = 12;
-const DIR = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 const ENEMIES = {
   scout: { hp: 1, speed: 112, delay: 1.8 },
   raider: { hp: 2, speed: 82, delay: 1.35 },
@@ -33,9 +32,11 @@ class TankMatch {
     this.grid = terrain(map);
     this.revision = 1;
     this.core = { x: center(BASE.x), y: center(BASE.y), hp: CORE_HP, maxHp: CORE_HP };
+    this.arena = { cols: COLS, rows: ROWS, tile: TILE, grid: this.grid, core: this.core };
     this.players = seats.map((seat, i) => ({
       id: seat.id, color: seat.color, x: center(DOCKS[i]), y: center(12), dir: 0,
       hp: 3, lives: 3, respawn: 0, shield: 2, cooldown: 0, input: idle(), kills: 0, damage: 0, score: 0,
+      inputSeq: 0, drive: -1,
     }));
     this.startedAt = Date.now();
     this.wave = 1;
@@ -57,6 +58,16 @@ class TankMatch {
   setInput(id, input) {
     const p = this.players.find((player) => player.id === id);
     if (p) p.input = input;
+  }
+
+  clearInput(id, resetSeq) {
+    const p = this.players.find((player) => player.id === id);
+    if (!p) return;
+    p.input = { ...idle(), seq: resetSeq ? 0 : p.input.seq };
+    if (resetSeq) {
+      p.inputSeq = 0;
+      p.drive = -1;
+    }
   }
 
   updatePaths() {
@@ -89,33 +100,15 @@ class TankMatch {
     this.route = route;
   }
 
-  blocked(x, y) {
-    for (const dx of [-RADIUS, RADIUS]) {
-      for (const dy of [-RADIUS, RADIUS]) {
-        const xx = x + dx;
-        const yy = y + dy;
-        if (xx < 0 || xx >= WIDTH || yy < 0 || yy >= HEIGHT || this.grid[index(xx, yy)] !== 0) return true;
-      }
-    }
-    return Math.abs(x - this.core.x) < 35 && Math.abs(y - this.core.y) < 35;
-  }
-
-  move(tank, x, y) {
-    if (this.blocked(x, y)) return false;
-    tank.x = x;
-    tank.y = y;
-    return true;
-  }
-
-  event(type, x, y) {
-    this.events.push({ type, x: Math.round(x), y: Math.round(y) });
+  event(type, x, y, owner) {
+    this.events.push({ type, x: Math.round(x), y: Math.round(y), owner });
   }
 
   fire(tank, enemy, dir = tank.dir) {
     const [dx, dy] = DIR[dir];
     const speed = enemy ? 260 : 465;
     this.shots.push({ id: this.nextId++, x: tank.x, y: tank.y, dx: dx * speed, dy: dy * speed, enemy, owner: tank });
-    this.event(enemy ? 'enemyFire' : 'fire', tank.x + dx * 23, tank.y + dy * 23);
+    this.event(enemy ? 'enemyFire' : 'fire', tank.x + dx * 23, tank.y + dy * 23, enemy ? undefined : tank.id);
   }
 
   spawn() {
@@ -134,6 +127,8 @@ class TankMatch {
   }
 
   updatePlayer(p, dt) {
+    p.inputSeq = p.input.seq ?? 0;
+    p.drive = p.input.dir;
     if (p.hp === 0) {
       if (!p.lives) return;
       p.respawn -= dt;
@@ -147,20 +142,9 @@ class TankMatch {
     }
     p.shield = Math.max(0, p.shield - dt);
     p.cooldown -= dt;
-    if (p.input.dir >= 0) {
-      p.dir = p.input.dir;
-      const [dx, dy] = DIR[p.dir];
-      const amount = 185 * dt;
-      if (!this.move(p, p.x + dx * amount, p.y + dy * amount)) {
-        // 进窄巷时把车身轻推向当前格中心。
-        const coord = dx ? p.y : p.x;
-        const offset = center(Math.floor(coord / TILE)) - coord;
-        const nudge = Math.sign(offset) * Math.min(Math.abs(offset), amount);
-        this.move(p, p.x + dy * nudge, p.y + dx * nudge);
-      }
-    }
+    drive(p, this.arena, p.drive, dt);
     if (p.input.fire && p.cooldown <= 0) {
-      p.cooldown = 0.29;
+      p.cooldown = SHOT_COOLDOWN;
       this.fire(p, false);
     }
   }
@@ -186,7 +170,7 @@ class TankMatch {
     });
     const remaining = distance(e, e.target);
     const amount = Math.min(remaining, kind.speed * dt);
-    const moved = this.move(e, e.x + dx * amount, e.y + dy * amount);
+    const moved = move(e, this.arena, e.x + dx * amount, e.y + dy * amount);
     if (moved && remaining <= amount + 0.0001) {
       e.x = e.target.x;
       e.y = e.target.y;
@@ -296,7 +280,7 @@ class TankMatch {
       phase: this.phase, wave: this.wave, waves: WAVE_COUNT, remaining: this.queue.length + this.enemies.length,
       countdown: Math.max(0, Math.ceil(this.countdown)), time: Math.max(0, Math.ceil(MATCH_TIME - this.elapsed)),
       core: this.core, result: this.result,
-      players: this.players.map((p) => ({ ...tank(p), color: p.color, lives: p.lives, shield: p.shield > 0, respawn: Math.max(0, Math.ceil(p.respawn)), kills: p.kills, score: p.score })),
+      players: this.players.map((p) => ({ ...tank(p), color: p.color, lives: p.lives, shield: p.shield > 0, respawn: Math.max(0, Math.ceil(p.respawn)), kills: p.kills, score: p.score, inputSeq: p.inputSeq, drive: p.drive })),
       enemies: this.enemies.map((e) => ({ ...tank(e), type: e.type, maxHp: ENEMIES[e.type].hp })),
       shots: this.shots.map((s) => ({ id: s.id, x: Math.round(s.x), y: Math.round(s.y), dir: s.dx ? (s.dx > 0 ? 1 : 3) : (s.dy > 0 ? 2 : 0), enemy: s.enemy })),
     };

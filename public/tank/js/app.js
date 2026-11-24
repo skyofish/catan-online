@@ -1,7 +1,10 @@
 import { getSession, takeHashSession, upgradeToHttps, goToLogin, api, wsUrl } from '/js/session.js';
 import { initFullscreen } from '/js/fullscreen.js';
-import { createField } from './field.js';
+import { createField } from './field.js?v=2';
 import { createAudio } from './audio.js';
+import { createPrediction } from './prediction.mjs';
+import { DIRECTIONS, SHOT_COOLDOWN } from './movement.mjs';
+import { unpack } from './protocol.mjs';
 
 const $ = (selector) => document.querySelector(selector);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -9,6 +12,11 @@ const mapHints = { depot: '钢墙与货箱交错', canyon: '两翼宽阔，中�
 const statusNames = { idle: '空闲', room: '房间中', playing: '对局中' };
 const field = createField($('#field'));
 const audio = createAudio($('#audio'));
+const prediction = createPrediction();
+const hud = {
+  wave: $('#wave'), remaining: $('#remaining'), coreCount: $('#core-count'),
+  core: $('#core'), time: $('#time'), round: $('#round-message'),
+};
 const directionKeys = { ArrowUp: 0, KeyW: 0, ArrowRight: 1, KeyD: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 3, KeyA: 3 };
 const movement = new Map();
 const firing = new Set();
@@ -18,14 +26,22 @@ let ready = false;
 let reconnectDelay = 450;
 let room = null;
 let me = null;
+let control = false;
 let state = null;
+let arena = null;
+let localPlayer = null;
+let receivedAt = 0;
+let compact = false;
+let rtt = null;
 let requestedRoom = null;
 let incoming = null;
 let toastTimer;
 let crewMarkup = '';
 let inviteTimer;
 let animation;
-let lastInput = '';
+let input = { dir: -1, fire: false, n: 0 };
+let sentInput = 0;
+let lastLocalFire = -Infinity;
 
 takeHashSession();
 upgradeToHttps();
@@ -79,7 +95,14 @@ function show(view) {
 }
 
 function draw(now) {
-  field.draw(now, me);
+  const pose = ready && control && compact && room?.phase === 'playing' ? prediction.pose(now) : null;
+  if (pose && input.fire && localPlayer?.hp && now - receivedAt < 225 && now - lastLocalFire >= SHOT_COOLDOWN * 1000) {
+    lastLocalFire = now;
+    const [dx, dy] = DIRECTIONS[pose.dir];
+    field.muzzle(pose.x + dx * 23, pose.y + dy * 23, now);
+    audio.play([{ type: 'fire' }]);
+  }
+  field.draw(now, me, pose);
   animation = requestAnimationFrame(draw);
 }
 
@@ -114,6 +137,8 @@ function renderRoom(msg) {
   const changed = previous?.matchId !== msg.room.matchId;
   room = msg.room;
   me = msg.you;
+  const controlsChanged = control !== (msg.control !== false);
+  control = msg.control !== false;
   requestedRoom = null;
   replaceCode(room.code);
   if (previous?.code !== room.code) window.scrollTo(0, 0);
@@ -147,13 +172,22 @@ function renderRoom(msg) {
   $('#battle-map').textContent = mapInfo(room.map).name;
   if (changed) {
     state = null;
+    arena = localPlayer = null;
+    compact = false;
     field.reset(config, room.map);
     crewMarkup = '';
     $('#battle-crew').replaceChildren();
     $('#round-message').hidden = true;
     $('#result').hidden = true;
     resetControls();
+    prediction.reset();
+    lastLocalFire = -Infinity;
+    send('ping', { n: performance.now() });
     window.scrollTo(0, 0);
+  }
+  if (controlsChanged && !changed) {
+    resetControls();
+    prediction.reset();
   }
   show('battle');
   $('#rematch').hidden = !host;
@@ -175,19 +209,34 @@ function renderCrew() {
   }
 }
 
-function renderState(next) {
+function writeText(el, text) {
+  if (el.textContent !== text) el.textContent = text;
+}
+
+function renderState(next, isCompact = false) {
   if (next.id !== room?.matchId) return;
+  const now = performance.now();
+  receivedAt = now;
+  compact = isCompact;
+  if (next.grid) arena = { tile: config.tile, cols: config.cols, rows: config.rows, grid: next.grid.slice(), core: next.core };
+  if (next.tiles && arena) {
+    for (const [i, value] of next.tiles) arena.grid[i] = value;
+  }
+  localPlayer = next.players.find((p) => p.id === me);
+  if (isCompact && control && arena && localPlayer) prediction.receive(localPlayer, arena, now);
   state = next;
-  field.update(next);
-  audio.play(next.events);
-  $('#wave').textContent = `${next.wave} / ${next.waves}`;
-  $('#remaining').textContent = String(next.remaining);
-  $('#core-count').textContent = `${next.core.hp} / ${next.core.maxHp}`;
-  $('#core').value = next.core.hp;
-  $('#time').textContent = `${Math.floor(next.time / 60)}:${String(next.time % 60).padStart(2, '0')}`;
-  const round = $('#round-message');
-  round.hidden = next.phase !== 'ready';
-  if (!round.hidden) round.textContent = `第 ${next.wave} 波来袭 · ${next.countdown}`;
+  const events = now - lastLocalFire < Math.max(330, (rtt ?? 0) + 120)
+    ? next.events.filter((e) => e.type !== 'fire' || e.owner !== me) : next.events;
+  field.update(next, arena?.grid, events, now);
+  audio.play(events);
+  writeText(hud.wave, `${next.wave} / ${next.waves}`);
+  writeText(hud.remaining, String(next.remaining));
+  writeText(hud.coreCount, `${next.core.hp} / ${next.core.maxHp}`);
+  if (hud.core.value !== next.core.hp) hud.core.value = next.core.hp;
+  writeText(hud.time, `${Math.floor(next.time / 60)}:${String(next.time % 60).padStart(2, '0')}`);
+  const preparing = next.phase === 'ready';
+  if (hud.round.hidden === preparing) hud.round.hidden = !preparing;
+  if (preparing) writeText(hud.round, `第 ${next.wave} 波来袭 · ${next.countdown}`);
   renderCrew();
   if (next.result) {
     resetControls();
@@ -220,6 +269,7 @@ function handle(msg) {
     case 'hello': {
       setConnection(true, '已连线');
       reconnectDelay = 450;
+      send('sync', { v: 2 });
       const code = room?.code || new URLSearchParams(location.search).get('room');
       if (code) join(code);
       else send('list');
@@ -230,6 +280,19 @@ function handle(msg) {
     case 'rooms': renderList(d); break;
     case 'room': renderRoom(d); break;
     case 'state': renderState(d); break;
+    case 'frame':
+      if (d.id !== room?.matchId) break;
+      send('ack', { id: d.id, n: d.n });
+      renderState(unpack(d), true);
+      break;
+    case 'pong': {
+      const sample = performance.now() - d.n;
+      if (sample >= 0 && sample < 10000) {
+        rtt = rtt === null ? sample : rtt * .8 + sample * .2;
+        prediction.setLatency(rtt);
+      }
+      break;
+    }
     case 'online': renderOnline(d); break;
     case 'invite': showInvite(d); break;
     case 'left':
@@ -270,67 +333,77 @@ function connect() {
     handle(msg);
   };
   ws.onclose = () => {
-    resetControls();
     setConnection(false, '正在重连');
+    resetControls();
+    prediction.reset();
+    prediction.setLatency(40);
+    rtt = null;
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 5000);
   };
 }
 
-function sendControls(force = false) {
-  if (document.body.dataset.view !== 'battle' || room?.phase !== 'playing' || !ready || ws.bufferedAmount > 4096) return;
+function sendControls(repeat = false) {
+  if (!ready || !control || room?.phase !== 'playing') return;
+  if (sentInput !== input.n || (repeat && (input.dir >= 0 || input.fire))) {
+    if (ws.bufferedAmount <= 4096 && send('input', input)) sentInput = input.n;
+  }
+}
+
+function readControls() {
   const dir = [...movement.values()].at(-1) ?? -1;
   const fire = firing.size > 0;
-  const key = `${dir}:${fire}`;
-  if (key !== lastInput || (force && (dir >= 0 || fire))) {
-    if (send('input', { dir, fire })) lastInput = key;
+  if (dir !== input.dir || fire !== input.fire) {
+    input = { dir, fire, n: input.n + 1 };
+    if (ready && control) prediction.input(dir, input.n, performance.now());
   }
+  sendControls();
 }
 
 function resetControls() {
   movement.clear();
   firing.clear();
   document.querySelectorAll('.touch .pressed').forEach((el) => el.classList.remove('pressed'));
-  sendControls();
-  lastInput = '';
+  readControls();
 }
 
 window.addEventListener('keydown', (event) => {
-  if (document.body.dataset.view !== 'battle' || room?.phase !== 'playing' || /INPUT|BUTTON|TEXTAREA/.test(event.target.tagName)) return;
+  if (!ready || !control || room?.phase !== 'playing' || /INPUT|BUTTON|TEXTAREA/.test(event.target.tagName)) return;
   if (!Object.hasOwn(directionKeys, event.code) && event.code !== 'Space') return;
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   event.preventDefault();
   if (event.repeat) return;
   if (event.code === 'Space') firing.add(event.code);
   else movement.set(event.code, directionKeys[event.code]);
-  sendControls();
+  readControls();
 });
 window.addEventListener('keyup', (event) => {
-  if (movement.delete(event.code) || firing.delete(event.code)) sendControls();
+  if (movement.delete(event.code) || firing.delete(event.code)) readControls();
 });
 window.addEventListener('blur', resetControls);
 document.addEventListener('visibilitychange', () => { if (document.hidden) resetControls(); });
 
 for (const button of document.querySelectorAll('.touch button')) {
   button.addEventListener('pointerdown', (event) => {
-    if (room?.phase !== 'playing') return;
+    if (!ready || !control || room?.phase !== 'playing') return;
     event.preventDefault();
     button.setPointerCapture(event.pointerId);
     if (button.hasAttribute('data-fire')) firing.add(event.pointerId);
     else movement.set(event.pointerId, Number(button.dataset.dir));
     button.classList.add('pressed');
-    sendControls();
+    readControls();
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     button.addEventListener(type, (event) => {
       movement.delete(event.pointerId);
       firing.delete(event.pointerId);
       button.classList.remove('pressed');
-      sendControls();
+      readControls();
     });
   }
 }
 setInterval(() => sendControls(true), 65);
+setInterval(() => { if (room?.phase === 'playing') send('ping', { n: performance.now() }); }, 2500);
 setInterval(() => { if (!room) send('list'); }, 10000);
 
 $('#open-create').onclick = () => $('#create-dialog').showModal();

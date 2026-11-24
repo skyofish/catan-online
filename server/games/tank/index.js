@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { MAPS, TILE, COLS, ROWS, ENTRY, DOCKS } = require('./maps');
 const { TankMatch, STEP, WAVE_COUNT } = require('./sim');
+const { pack } = require('../../../public/tank/js/protocol.mjs');
 
 const ID = 'tank';
 const NAME = '坦克大战：铁线防卫';
@@ -11,6 +12,7 @@ const COLORS = ['#45d7bb', '#72aaff', '#ffcb72', '#d59af7'];
 const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 200;
 const EXPIRE_MS = 2 * 60_000;
 const INPUT_MS = 250;
+const MAX_UNACKED = 8;
 const maps = Object.entries(MAPS).map(([id, { name, theme }]) => ({ id, name, theme }));
 const uuid = () => crypto.randomBytes(6).toString('base64url');
 const clean = (s) => typeof s === 'string' ? s.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 24) : '';
@@ -40,32 +42,54 @@ module.exports = function createTank(platform) {
   function broadcastRoom(room) {
     const data = roomInfo(room);
     for (const seat of room.seats) {
-      for (const conn of seat.conns) conn.send({ t: 'room', d: { room: data, you: seat.id } });
+      const driver = [...seat.conns].at(-1);
+      for (const conn of seat.conns) conn.send({ t: 'room', d: { room: data, you: seat.id, control: conn === driver } });
     }
   }
 
-  function pushState(room, events = []) {
+  function resetStream(conn) {
+    conn.tankRevision = 0;
+    conn.tankGrid = null;
+    conn.tankSeen = conn.tankSeq;
+  }
+
+  function pushState(room, events = [], only = null) {
     const match = room.match;
     if (!match) return;
     const payload = { ...match.snapshot(), id: room.matchId, events };
-    const normal = JSON.stringify({ t: 'state', d: payload });
-    let full;
+    let normal, full, packed;
     for (const seat of room.seats) {
       for (const conn of seat.conns) {
+        if (only && conn !== only) continue;
         if (!match.result && conn.socket.writableLength > 12 * 1024) continue;
-        if (conn.tankRevision === match.revision) conn.send(normal);
-        else {
-          full ??= JSON.stringify({ t: 'state', d: { ...payload, grid: match.grid } });
-          conn.send(full);
+        if (conn.tankCompact) {
+          // 代理和内核可能先接收大量数据，应用层确认才能判断浏览器是否收到。
+          if (!match.result && conn.tankSeq - conn.tankSeen >= MAX_UNACKED) continue;
+          const d = { ...(packed ??= pack(payload)), n: ++conn.tankSeq };
+          if (conn.tankRevision !== match.revision) {
+            if (!conn.tankGrid) d.grid = match.grid;
+            else {
+              d.tiles = [];
+              for (const [i, v] of match.grid.entries()) if (v !== conn.tankGrid[i]) d.tiles.push([i, v]);
+            }
+            conn.tankGrid = match.grid.slice();
+          }
+          conn.send({ t: 'frame', d });
+        } else if (conn.tankRevision === match.revision) {
+          conn.send(normal ??= JSON.stringify({ t: 'state', d: payload }));
+        } else {
+          conn.send(full ??= JSON.stringify({ t: 'state', d: { ...payload, grid: match.grid } }));
+        }
+        if (conn.tankRevision !== match.revision) {
           conn.tankRevision = match.revision;
         }
       }
     }
   }
 
-  function clearInput(room, seat) {
+  function clearInput(room, seat, resetSeq = false) {
     seat.lastInput = 0;
-    if (room.match) room.match.setInput(seat.id, { dir: -1, fire: false });
+    room.match?.clearInput(seat.id, resetSeq);
   }
 
   function chooseHost(room) {
@@ -86,7 +110,7 @@ module.exports = function createTank(platform) {
     if (!seat) return;
     const controlling = [...seat.conns].at(-1) === conn;
     seat.conns.delete(conn);
-    if (controlling) clearInput(room, seat);
+    if (controlling) clearInput(room, seat, true);
     if (!seat.conns.size) seat.offlineSince = Date.now();
     if (!seat.conns.size && explicit && !room.match) removeSeat(room, seat);
     if (!onlineCount(room)) room.emptySince = Date.now();
@@ -118,14 +142,14 @@ module.exports = function createTank(platform) {
     }
     if (!seat.conns.has(conn)) {
       seat.conns.add(conn);
-      clearInput(room, seat);
+      clearInput(room, seat, true);
     }
     conn.tankRoom = room.code;
-    conn.tankRevision = 0;
+    resetStream(conn);
     room.emptySince = null;
     chooseHost(room);
     broadcastRoom(room);
-    pushState(room);
+    pushState(room, [], conn);
   }
 
   function record(room) {
@@ -146,6 +170,24 @@ module.exports = function createTank(platform) {
   }
 
   const handlers = {
+    sync(conn, d) {
+      if (d.v === 2 && !conn.tankCompact) {
+        conn.tankCompact = true;
+        resetStream(conn);
+      }
+    },
+
+    ack(conn, d) {
+      const room = rooms.get(conn.tankRoom);
+      if (room?.match && d.id === room.matchId && Number.isSafeInteger(d.n) && d.n > conn.tankSeen && d.n <= conn.tankSeq) {
+        conn.tankSeen = d.n;
+      }
+    },
+
+    ping(conn, d) {
+      if (Number.isFinite(d.n)) conn.send({ t: 'pong', d: { n: d.n } });
+    },
+
     list(conn) {
       const available = [];
       for (const room of rooms.values()) {
@@ -194,7 +236,7 @@ module.exports = function createTank(platform) {
       room.acc = 0;
       room.match = new TankMatch(room.map, room.seats);
       room.matchId = uuid();
-      for (const p of room.seats) for (const c of p.conns) c.tankRevision = 0;
+      for (const p of room.seats) for (const c of p.conns) resetStream(c);
       broadcastRoom(room);
       pushState(room);
     },
@@ -215,7 +257,8 @@ module.exports = function createTank(platform) {
       const seat = room.seats.find((p) => p.conns.has(conn));
       if (!seat || [...seat.conns].at(-1) !== conn) return;
       const dir = Number.isInteger(d.dir) && d.dir >= 0 && d.dir < 4 ? d.dir : -1;
-      room.match.setInput(seat.id, { dir, fire: d.fire === true });
+      const seq = conn.tankCompact && Number.isSafeInteger(d.n) && d.n > 0 ? d.n : 0;
+      room.match.setInput(seat.id, { dir, fire: d.fire === true, seq });
       seat.lastInput = Date.now();
     },
 
@@ -350,6 +393,10 @@ module.exports = function createTank(platform) {
     },
   };
 
-  return { id: ID, rooms, handlers, routes, summary, presence, kickUser, onConnect() {}, onClose: leave,
-    shutdown: () => clearInterval(loop), rateKey: (type) => type === 'input' };
+  return {
+    id: ID, rooms, handlers, routes, summary, presence, kickUser, onClose: leave,
+    onConnect(conn) { conn.tankSeq = conn.tankSeen = 0; },
+    shutdown: () => clearInterval(loop),
+    rateKey: (type) => type === 'input' || type === 'ack' || type === 'ping',
+  };
 };

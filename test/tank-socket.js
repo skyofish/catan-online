@@ -5,6 +5,7 @@ const { once } = require('node:events');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { unpack } = require('../public/tank/js/protocol.mjs');
 
 const PORT = 3991;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -20,7 +21,7 @@ async function request(url, { method = 'GET', body, token } = {}) {
   return res.json();
 }
 
-async function socket(pathname, token) {
+async function socket(pathname, token, { compact = false, autoAck = true } = {}) {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}${pathname}`);
   const inbox = [];
   const waiters = new Set();
@@ -28,6 +29,10 @@ async function socket(pathname, token) {
   ws.addEventListener('close', () => clients.delete(ws), { once: true });
   ws.addEventListener('message', (event) => {
     const msg = JSON.parse(event.data);
+    if (msg.t === 'frame') {
+      if (autoAck) send('ack', { n: msg.d.n, id: msg.d.id });
+      msg.d = unpack(msg.d);
+    }
     const waiter = [...waiters].find((w) => w.matches(msg));
     if (waiter) {
       waiters.delete(waiter);
@@ -57,6 +62,7 @@ async function socket(pathname, token) {
   if (token) {
     send('hello', { session: token });
     await wait('hello');
+    if (compact) send('sync', { v: 2 });
   }
   return { send, wait, close: async () => {
     const closed = once(ws, 'close', { signal: AbortSignal.timeout(5000) });
@@ -85,7 +91,8 @@ async function main() {
     const catalogue = await request('/api/games', { token: tokens[0] });
     assert.equal(catalogue.games.find((game) => game.id === 'tank').path, '/tank/');
     assert.equal((await request('/api/tank/config')).maps.length, 3);
-    for (const asset of ['/tank/', '/tank/art/iron-line.jpg', '/tank/css/style.css', '/tank/js/app.js', '/tank/js/field.js', '/tank/js/audio.js']) {
+    for (const asset of ['/tank/', '/tank/art/iron-line.jpg', '/tank/css/style.css', '/tank/js/app.js?v=2', '/tank/js/field.js?v=2', '/tank/js/audio.js',
+      '/tank/js/movement.mjs', '/tank/js/protocol.mjs', '/tank/js/prediction.mjs']) {
       assert.equal((await fetch(BASE + asset)).status, 200, asset);
     }
     const unauthenticated = await socket('/tank/ws');
@@ -93,7 +100,8 @@ async function main() {
     assert.equal((await unauthenticated.wait('auth')).ok, false);
     await unauthenticated.close();
 
-    const [a, b, c, d, extra] = await Promise.all(tokens.map((token) => socket('/tank/ws', token)));
+    const [a, b, c, d, extra] = await Promise.all(tokens.map((token, i) =>
+      socket('/tank/ws', token, { compact: i !== 2, autoAck: i !== 1 })));
     const hub = await socket('/hub/ws', tokens[1]);
     a.send('create', { map: 'depot', title: '测试编队', private: true });
     const { room: { code }, you: aId } = await a.wait('room');
@@ -123,27 +131,48 @@ async function main() {
     a.send('configure', { map: 'foundry' });
     await d.wait('room', ({ room }) => room.map === 'foundry');
     a.send('start');
-    const first = await d.wait('state', ({ grid }) => !!grid);
+    const first = await d.wait('frame', ({ grid }) => !!grid);
     assert.equal(first.players.length, 4);
     assert.equal(new Set(first.players.map(({ color }) => color)).size, 4);
     assert.equal(first.grid.length, 20 * 14);
     const initialX = first.players.find(({ id }) => id === aId).x;
-    a.send('input', { dir: 3, fire: true });
-    const fired = await d.wait('state', (state) => state.shots.some((shot) => !shot.enemy));
+    const legacy = await c.wait('state', ({ grid }) => !!grid);
+    assert.deepEqual(legacy.grid, first.grid);
+    a.send('input', { dir: 3, fire: true, n: 1 });
+    const fired = await d.wait('frame', (state) => state.shots.some((shot) => !shot.enemy));
     assert.ok(fired.players.find(({ id }) => id === aId).x < initialX);
-    a.send('input', { dir: -1, fire: false });
+    assert.equal(fired.players.find(({ id }) => id === aId).inputSeq, 1);
+    a.send('input', { dir: -1, fire: false, n: 2 });
+    await d.wait('frame', (state) => state.players.find(({ id }) => id === aId).inputSeq === 2);
+
+    const stalled = await b.wait('frame', ({ n }) => n === 8);
+    await assert.rejects(b.wait('frame', ({ n }) => n > stalled.n, 240), /超时/);
+    const fireAtCrate = () => a.send('input', { dir: 0, fire: true, n: 3 });
+    fireAtCrate();
+    const repeatFire = setInterval(fireAtCrate, 65);
+    let changed;
+    try {
+      changed = await d.wait('frame', ({ tiles }) => tiles?.some(([i]) => i === 10 * 20 + 8));
+    } finally {
+      clearInterval(repeatFire);
+    }
+    a.send('input', { dir: -1, fire: false, n: 4 });
+    assert.equal(changed.grid, undefined);
+    b.send('ack', { id: stalled.id, n: stalled.n });
+    const resumed = await b.wait('frame', ({ n }) => n > stalled.n);
+    assert.ok(resumed.tiles.some(([i]) => i === 10 * 20 + 8), '拥塞恢复后应补齐漏收的地形变化');
 
     await b.close();
     await d.wait('room', ({ room }) => room.players.some((p) => p.id === bId && !p.online));
-    const back = await socket('/tank/ws', tokens[1]);
+    const back = await socket('/tank/ws', tokens[1], { compact: true });
     back.send('join', { code });
     const rejoined = await back.wait('room', ({ room }) => room.phase === 'playing');
     assert.equal(rejoined.you, bId);
-    const loaded = await back.wait('state', ({ grid }) => !!grid);
+    const loaded = await back.wait('frame', ({ grid }) => !!grid);
     assert.equal(loaded.id, first.id);
     assert.equal((await request('/api/games', { token: tokens[1] })).games.find((g) => g.id === 'tank').live.myRoom, code);
 
-    const ended = await d.wait('state', (s) => !!s.result, 45_000);
+    const ended = await d.wait('frame', (s) => !!s.result, 45_000);
     assert.equal(ended.result.reason, 'core');
     const stats = await request('/api/tank/me', { token: tokens[0] });
     assert.equal(stats.stats.games, 1);

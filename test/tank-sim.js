@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const { COLS, ROWS, BASE, ENTRY, DOCKS, TILE, MAPS } = require('../server/games/tank/maps');
 const { TankMatch, STEP, WAVE_COUNT } = require('../server/games/tank/sim');
+const { createPrediction } = require('../public/tank/js/prediction.mjs');
 
 const seats = Array.from({ length: 4 }, (_, i) => ({ id: i + 1, color: '#45d7bb' }));
 const middle = (c) => (c + 0.5) * TILE;
@@ -79,4 +80,26 @@ for (const key of Object.keys(MAPS)) {
   assert.equal(p.score, 330);
 }
 
-console.log('✅ 坦克大战规则模拟通过（三张图、障碍物、友军、复活、波次及胜负）');
+{
+  const g = new TankMatch('depot', seats.slice(0, 1));
+  const p = g.snapshot().players[0];
+  const prediction = createPrediction();
+  prediction.setLatency(160);
+  prediction.receive(p, g.arena, 1000);
+  prediction.input(3, 1, 1010);
+  assert.ok(prediction.pose(1026).x < p.x, '移动应在服务器确认之前出现');
+  assert.equal(prediction.pose(1026).dir, 3);
+  prediction.input(-1, 2, 1050);
+  assert.equal(prediction.pose(1080).x, prediction.pose(1050).x, '松开键后立即停止');
+  prediction.receive({ ...p, inputSeq: 2, x: p.x - 7 }, g.arena, 1090);
+  assert.equal(prediction.pose(1200).x, p.x - 7, '以服务器确认位置为准');
+  assert.equal(prediction.pose(1500), null, '长时间缺少状态时停止预演');
+
+  g.grid[flat(7, 12)] = -1;
+  prediction.reset();
+  prediction.receive(p, g.arena, 2000);
+  prediction.input(3, 1, 2000);
+  assert.ok(prediction.pose(2120).x >= 8 * TILE + 15, '预演不得穿过掩体');
+}
+
+console.log('✅ 坦克大战规则模拟通过（三张图、障碍物、友军、复活、波次胜负和移动预演）');

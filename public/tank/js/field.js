@@ -1,4 +1,4 @@
-// 地形图层只在掩体变化时重绘，战车与炮弹独立插值。
+// 地形、车身和炮弹贴图复用，车辆与炮弹在服务器状态之间连续绘制。
 const THEMES = {
   depot: { floor: '#263634', floorDark: '#121e20', line: '#70837a', steel: '#5c7370', edge: '#8fa39a', crate: '#8a6142', lamp: '#72c3a9' },
   canyon: { floor: '#44312a', floorDark: '#261d1b', line: '#99735b', steel: '#795a4a', edge: '#a7836b', crate: '#a86a43', lamp: '#f3af69' },
@@ -100,7 +100,7 @@ function terrainTile(g, x, y, tile, kind, theme, seed) {
   }
 }
 
-function drawGround(g, cfg, map, grid) {
+function drawGround(g, cfg, map) {
   const { tile, cols, rows, entry, docks } = cfg;
   const theme = THEMES[map] || THEMES.depot;
   const w = tile * cols;
@@ -159,9 +159,6 @@ function drawGround(g, cfg, map, grid) {
     g.fillRect(x + 7, y + tile - 9, tile - 14, 2);
   }
 
-  for (const [i, kind] of grid.entries()) {
-    if (kind) terrainTile(g, (i % cols) * tile, Math.floor(i / cols) * tile, tile, kind, theme, i);
-  }
   const edge = g.createRadialGradient(w / 2, h / 2, h * .25, w / 2, h / 2, w * .64);
   edge.addColorStop(0, '#0000');
   edge.addColorStop(1, '#050a10aa');
@@ -192,29 +189,12 @@ function drawCore(g, core, now) {
   g.restore();
 }
 
-function drawTank(g, p, place, prev, now, own, label) {
-  const color = p.color || HOSTILE[p.type];
-  const angle = place.angle;
-  const x = place.x;
-  const y = place.y;
-  const scale = p.type === 'scout' ? .84 : p.type === 'siege' ? 1.16 : 1;
-  g.save();
-  g.translate(x, y);
-  if (p.shield) {
-    g.strokeStyle = own ? '#98f6daa2' : '#b5dfe278';
-    g.lineWidth = 1.5;
-    g.beginPath();
-    g.arc(0, 0, 22 + Math.sin(now / 140) * 1.4, 0, TAU);
-    g.stroke();
-  }
-  g.rotate(angle);
-  g.scale(scale, scale);
+function drawHull(g, color, phase) {
   box(g, -18, -15, 40, 39, 7, '#070b10a8');
   for (const side of [-1, 1]) {
     const offset = side < 0 ? -17 : 8;
     box(g, offset, -18, 9, 36, 3, '#101519', '#4d5757');
     g.fillStyle = '#737f796d';
-    const phase = prev && (prev.x !== p.x || prev.y !== p.y) ? Math.abs(Math.floor((place.x + place.y) / 3)) % 5 : 0;
     for (let j = -14 + phase; j < 16; j += 5) g.fillRect(offset + 1, j, 7, 1.4);
   }
   const hull = gradient(g, -12, -15, 12, 18, [[0, color], [.43, '#536866'], [1, '#1d2b2d']]);
@@ -229,6 +209,40 @@ function drawTank(g, p, place, prev, now, own, label) {
   box(g, -3, -1, 6, 6, 1, '#26393b', '#bacfc255');
   box(g, -12, -15, 4, 4, 1, color);
   box(g, 8, -15, 4, 4, 1, color);
+}
+
+function bitmap(w, h = w) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  return canvas;
+}
+
+function drawTank(g, p, place, moving, now, own, label, cache) {
+  const color = p.color || HOSTILE[p.type];
+  const { x, y, angle } = place;
+  const scale = p.type === 'scout' ? .84 : p.type === 'siege' ? 1.16 : 1;
+  const phase = moving ? Math.abs(Math.floor((x + y) / 3)) % 5 : 0;
+  const key = color + phase;
+  let sprite = cache.get(key);
+  if (!sprite) {
+    sprite = bitmap(56);
+    const context = sprite.getContext('2d');
+    context.translate(28, 28);
+    drawHull(context, color, phase);
+    cache.set(key, sprite);
+  }
+  g.save();
+  g.translate(x, y);
+  if (p.shield) {
+    g.strokeStyle = own ? '#98f6daa2' : '#b5dfe278';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.arc(0, 0, 22 + Math.sin(now / 140) * 1.4, 0, TAU);
+    g.stroke();
+  }
+  g.rotate(angle);
+  g.drawImage(sprite, -28 * scale, -28 * scale, 56 * scale, 56 * scale);
   g.restore();
 
   if (label) {
@@ -243,11 +257,10 @@ function drawTank(g, p, place, prev, now, own, label) {
   }
 }
 
-function drawShot(g, b, x, y) {
-  const color = b.enemy ? '#ff9d62' : '#8df9de';
-  g.save();
-  g.translate(x, y);
-  g.rotate(b.dir * ANGLE);
+function shotSprite(color) {
+  const sprite = bitmap(30);
+  const g = sprite.getContext('2d');
+  g.translate(15, 15);
   glow(g, 0, 0, 13, color + '94');
   g.strokeStyle = gradient(g, 0, 13, 0, -4, [[0, color + '00'], [1, color]]);
   g.lineWidth = 4;
@@ -256,77 +269,121 @@ function drawShot(g, b, x, y) {
   g.lineTo(0, -3);
   g.stroke();
   box(g, -2.5, -4, 5, 8, 2, '#fff9e2');
-  g.restore();
+  return sprite;
 }
 
 export function createField(canvas) {
   const g = canvas.getContext('2d', { alpha: false });
-  const floor = document.createElement('canvas');
+  const ground = bitmap(1);
+  const floor = bitmap(1);
   const fg = floor.getContext('2d');
+  const hulls = new Map();
+  const bullets = [shotSprite('#8df9de'), shotSprite('#ff9d62')];
+  const flares = new Map();
   let cfg;
-  let map;
+  let tiles = new Map();
   let frame;
-  let previous;
+  let previousPlayers;
+  let previousEnemies;
+  let previousShots;
   let updatedAt = 0;
-  let motion = new Map();
+  let period = 50;
+  let displayWidth = 0;
+  const motion = new Map();
   let effects = [];
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  new ResizeObserver(([entry]) => { displayWidth = entry.contentRect.width; }).observe(canvas);
+
   function reset(config, key) {
     cfg = config;
-    map = key;
-    canvas.width = floor.width = cfg.cols * cfg.tile;
-    canvas.height = floor.height = cfg.rows * cfg.tile;
-    drawGround(fg, cfg, map, []);
-    frame = previous = null;
+    const theme = THEMES[key] || THEMES.depot;
+    ground.width = floor.width = cfg.cols * cfg.tile;
+    ground.height = floor.height = cfg.rows * cfg.tile;
+    drawGround(ground.getContext('2d'), cfg, key);
+    tiles = new Map([-1, 1, 2].map((kind) => {
+      const sprite = bitmap(cfg.tile + 7);
+      terrainTile(sprite.getContext('2d'), 0, 0, cfg.tile, kind, theme, 7);
+      return [kind, sprite];
+    }));
+    fg.drawImage(ground, 0, 0);
+    frame = null;
+    updatedAt = 0;
+    period = 50;
     motion.clear();
     effects = [];
   }
 
-  function update(state) {
-    previous = frame;
+  const lookup = (list) => new Map(list?.map((item) => [item.id, item]));
+
+  function update(state, grid = state.grid, events = state.events, now = performance.now()) {
+    previousPlayers = lookup(frame?.players);
+    previousEnemies = lookup(frame?.enemies);
+    previousShots = lookup(frame?.shots);
+    if (frame && now > updatedAt) period = clamp(period * .75 + (now - updatedAt) * .25, 35, 85);
+    for (const id of motion.keys()) if (id[0] === 'e' && !previousEnemies.has(Number(id.slice(1)))) motion.delete(id);
     frame = state;
-    updatedAt = performance.now();
-    if (state.grid) drawGround(fg, cfg, map, state.grid);
-    for (const ev of state.events) {
+    updatedAt = now;
+    if ((state.grid || state.tiles?.length) && grid) {
+      fg.drawImage(ground, 0, 0);
+      for (const [i, kind] of grid.entries()) {
+        if (kind) fg.drawImage(tiles.get(kind), (i % cfg.cols) * cfg.tile, Math.floor(i / cfg.cols) * cfg.tile);
+      }
+    }
+    for (const ev of events) {
       const duration = ev.type === 'blast' ? 540 : ev.type === 'spawn' || ev.type === 'wave' ? 500 : 220;
       effects.push({ ...ev, start: updatedAt, duration });
     }
   }
 
-  function place(key, p, t) {
+  function muzzle(x, y, now) {
+    effects.push({ type: 'fire', x, y, start: now, duration: 220 });
+  }
+
+  function place(key, p, prev, t) {
     const last = motion.get(key);
-    const prev = previous?.[key[0] === 'p' ? 'players' : 'enemies'].find(({ id }) => id === p.id);
     const snap = !prev?.hp || Math.hypot(prev.x - p.x, prev.y - p.y) > 60;
     const angle = p.dir * ANGLE;
     const old = snap ? angle : last?.angle ?? angle;
     const delta = Math.atan2(Math.sin(angle - old), Math.cos(angle - old));
     const result = { x: snap ? p.x : lerp(prev.x, p.x, t), y: snap ? p.y : lerp(prev.y, p.y, t), angle: old + delta * .38 };
     motion.set(key, result);
-    return { result, prev };
+    return result;
   }
 
-  function draw(now, me) {
+  function draw(now, me, pose) {
     if (!cfg) return;
+    // 手机按实际显示宽度绘制，避免每帧合成一张比屏幕宽得多的画布。
+    const width = Math.min(floor.width, Math.round((displayWidth || floor.width) * Math.min(devicePixelRatio || 1, 1.25)));
+    const height = Math.round(width * floor.height / floor.width);
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    g.setTransform(width / floor.width, 0, 0, height / floor.height, 0, 0);
     g.drawImage(floor, 0, 0);
     if (!frame) return;
     drawCore(g, frame.core, now);
-    const t = clamp((now - updatedAt) / 50, 0, 1);
+    const t = clamp((now - updatedAt) / period, 0, 1);
     for (const [i, p] of frame.players.entries()) if (p.hp) {
-      const { result, prev } = place('p' + p.id, p, t);
-      drawTank(g, p, result, prev, now, p.id === me, 'P' + (i + 1));
+      const ownPose = p.id === me ? pose : null;
+      const prev = previousPlayers.get(p.id);
+      const result = ownPose ? { ...ownPose, angle: ownPose.dir * ANGLE } : place('p' + p.id, p, prev, t);
+      const moving = !!prev && (prev.x !== result.x || prev.y !== result.y);
+      drawTank(g, p, result, moving, now, p.id === me, 'P' + (i + 1), hulls);
     }
-    const enemies = new Set();
     for (const p of frame.enemies) {
-      const key = 'e' + p.id;
-      enemies.add(key);
-      const { result, prev } = place(key, p, t);
-      drawTank(g, p, result, prev, now, false);
+      const prev = previousEnemies.get(p.id);
+      const result = place('e' + p.id, p, prev, t);
+      drawTank(g, p, result, !!prev && (prev.x !== p.x || prev.y !== p.y), now, false, null, hulls);
     }
-    for (const key of motion.keys()) if (key[0] === 'e' && !enemies.has(key)) motion.delete(key);
     for (const b of frame.shots) {
-      const old = previous?.shots.find(({ id }) => id === b.id);
-      drawShot(g, b, old ? lerp(old.x, b.x, t) : b.x, old ? lerp(old.y, b.y, t) : b.y);
+      const old = previousShots.get(b.id);
+      g.save();
+      g.translate(old ? lerp(old.x, b.x, t) : b.x, old ? lerp(old.y, b.y, t) : b.y);
+      g.rotate(b.dir * ANGLE);
+      g.drawImage(bullets[+b.enemy], -15, -15);
+      g.restore();
     }
     effects = effects.filter((p) => now - p.start < p.duration);
     for (const p of effects) {
@@ -336,7 +393,14 @@ export function createField(canvas) {
       const color = entrance || p.type === 'fire' ? '#91f1c4' : '#ffc575';
       g.save();
       g.globalAlpha = (1 - life) * (reduced ? .46 : 1);
-      glow(g, p.x, p.y, (blast ? 34 : 17) * (1 + life), color + 'af');
+      let flare = flares.get(color);
+      if (!flare) {
+        flare = bitmap(48);
+        glow(flare.getContext('2d'), 24, 24, 24, color + 'af');
+        flares.set(color, flare);
+      }
+      const radius = (blast ? 34 : 17) * (1 + life);
+      g.drawImage(flare, p.x - radius, p.y - radius, radius * 2, radius * 2);
       if (entrance || blast) {
         g.strokeStyle = color;
         g.beginPath();
@@ -355,5 +419,5 @@ export function createField(canvas) {
     }
   }
 
-  return { reset, update, draw };
+  return { reset, update, draw, muzzle };
 }
